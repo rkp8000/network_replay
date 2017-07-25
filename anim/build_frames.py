@@ -177,6 +177,23 @@ def ntwk_activity(
             y_max + 0.1*y_r,
         ]
     
+    # automatically adjust box if either dimension is zero
+    if all([b == 0 for b in box]):
+        print('Zero-dimensioned box detected. Adjusting width and height to 1')
+        box = [-0.5, 0.5, -0.5, 0.5]
+        
+    if box[0] == box[1]:
+        print('Zero-width box detected. Adjusting to 1/5 of height.')
+        temp = (box[3] - box[2]) / 5
+        box[0] -= temp/2
+        box[1] += temp/2
+    
+    if box[2] == box[3]:
+        print('Zero-height box detected. Adjusting to 1/5 of width.')
+        temp = (box[1] - box[0]) / 5
+        box[2] -= temp/2
+        box[3] += temp/2
+    
     # convert membrane potentials to scatter sizes
     slope = (spiking_size - resting_size) / (v_th - v_rest)
     sizes = slope * (vs - v_rest) + resting_size
@@ -306,6 +323,23 @@ def traj(
             y_min - 0.1*y_r,
             y_max + 0.1*y_r,
         ]
+    
+    # automatically adjust box if either dimension is zero
+    if all([b == 0 for b in box]):
+        print('Zero-dimensioned box detected. Adjusting width and height to 1')
+        box = [-0.5, 0.5, -0.5, 0.5]
+        
+    if box[0] == box[1]:
+        print('Zero-width box detected. Adjusting to 1/5 of height.')
+        temp = (box[3] - box[2]) / 5
+        box[0] -= temp/2
+        box[1] += temp/2
+    
+    if box[2] == box[3]:
+        print('Zero-height box detected. Adjusting to 1/5 of width.')
+        temp = (box[1] - box[0]) / 5
+        box[2] -= temp/2
+        box[3] += temp/2
         
     # make sure save directory exists
     save_dir = os.path.dirname(save_prefix)
