@@ -1,0 +1,10 @@
+*.pyc
+*.DS_Store
+*.DS_store
+
+*.png
+*.gif
+*.db
+
+sandbox.ipynb
+*ipynb_checkpoints
