@@ -73,7 +73,7 @@ def downsample_ma(xs, num):
 def ntwk_activity(
         save_prefix, time_file, activity_file, fps=30, resting_size=50, spiking_size=1000,
         default_color=(0, 0, 0), spiking_color=(1, 0, 0), frames_per_spike=5,
-        box=None, show_timestamp=True, fig_size=(7, 7), verbose=False):
+        box=None, show_timestamp=True, fig_size=(6.4, 4.8), verbose=False):
     """
     Convert a time-series of membrane potentials and spikes into viewable frames.
     
@@ -186,7 +186,7 @@ def ntwk_activity(
     if not os.path.exists(save_dir): os.makedirs(save_dir)
     
     # set up figure and position neurons
-    fig, ax = plt.subplots(1, 1)
+    fig, ax = plt.subplots(1, 1, figsize=fig_size, tight_layout=True)
     
     ax.set_xlim(box[:2])
     ax.set_ylim(box[2:])
@@ -239,7 +239,7 @@ def ntwk_activity(
 def traj(
         save_prefix, time_file, traj_file, fps=30, decay=0.5,
         location_size=2000, path_size=200, location_color=(0, 0, 1, .3), path_color=(0, 0, 0),
-        box=None, fig_size=(7, 7), show_timestamp=True, verbose=False):
+        box=None, fig_size=(6.4, 4.8), show_timestamp=True, verbose=False):
     """
     Convert a time-series of positions into a series of still frames.
     
@@ -312,7 +312,7 @@ def traj(
     if not os.path.exists(save_dir): os.makedirs(save_dir)
         
     # set up figure
-    fig, ax = plt.subplots(1, 1)
+    fig, ax = plt.subplots(1, 1, figsize=fig_size, tight_layout=True)
     
     ax.set_xlim(box[:2])
     ax.set_ylim(box[2:])
