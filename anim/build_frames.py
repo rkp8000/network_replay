@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+from plot import set_font_size
 from scipy import signal
 import shelve
 
@@ -73,7 +74,8 @@ def downsample_ma(xs, num):
 def ntwk_activity(
         save_prefix, time_file, activity_file, fps=30, resting_size=50, spiking_size=1000,
         default_color=(0, 0, 0), spiking_color=(1, 0, 0), frames_per_spike=5,
-        box=None, show_timestamp=True, fig_size=(6.4, 4.8), verbose=False):
+        box=None, title='', x_label='', y_label='', show_timestamp=True,
+        fig_size=(6.4, 4.8), font_size=16, verbose=False):
     """
     Convert a time-series of membrane potentials and spikes into viewable frames.
     
@@ -208,6 +210,11 @@ def ntwk_activity(
     ax.set_xlim(box[:2])
     ax.set_ylim(box[2:])
     
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    
+    set_font_size(ax, font_size)
+    
     sca = ax.scatter(positions[0], positions[1], c=default_color, s=10, lw=0)
     
     # loop over frames
@@ -234,7 +241,10 @@ def ntwk_activity(
         sca.set_sizes(sizes_)
         
         if show_timestamp:
-            ax.set_title('t = {0:.3f} s'.format(t))
+            if title:
+                ax.set_title('{0}\nt = {1:.3f} s'.format(title, t), fontsize=font_size)
+            else:
+                ax.set_title('t = {0:.3f} s'.format(t), fontsize=font_size)
             
         plt.draw()
         
@@ -256,7 +266,8 @@ def ntwk_activity(
 def traj(
         save_prefix, time_file, traj_file, fps=30, decay=0.5,
         location_size=2000, path_size=200, location_color=(0, 0, 1, .3), path_color=(0, 0, 0),
-        box=None, fig_size=(6.4, 4.8), show_timestamp=True, verbose=False):
+        box=None, title='', x_label='', y_label='', fig_size=(6.4, 4.8),
+        show_timestamp=True, font_size=16, verbose=False):
     """
     Convert a time-series of positions into a series of still frames.
     
@@ -351,6 +362,11 @@ def traj(
     ax.set_xlim(box[:2])
     ax.set_ylim(box[2:])
     
+    ax.set_xlabel(x_label)
+    ax.set_ylabel(y_label)
+    
+    set_font_size(ax, font_size)
+    
     # plot all points with zero opacity
     sca = ax.scatter(xs, ys, s=path_size, c=(path_color + (0,)), lw=0, zorder=0)
     
@@ -375,7 +391,10 @@ def traj(
         sca_2.set_offsets([x, y])
         
         if show_timestamp:
-            ax.set_title('t = {0:.3f} s'.format(t))
+            if title:
+                ax.set_title('{0}\nt = {1:.3f} s'.format(title, t), fontsize=font_size)
+            else:
+                ax.set_title('t = {0:.3f} s'.format(t), fontsize=font_size)
             
         plt.draw()
         
