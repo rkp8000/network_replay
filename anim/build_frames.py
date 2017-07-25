@@ -144,11 +144,11 @@ def ntwk_activity(
         if verbose:
             print('Downsampling data from {} Hz to {} fps...'.format(fs, fps))
         
-        # membrane potential
         n_down = int(round((ts[-1] - ts[0]) * fps))
-        vs, ts = signal.resample(vs, n_down, t=ts, axis=0)
+        ts = downsample_ma(ts, n_down)
         
-        # spikes
+        # membrane potential and spikes
+        vs = downsample_ma(vs, n_down)
         spikes = downsample_spikes(spikes, n_down)
     
         if verbose:
