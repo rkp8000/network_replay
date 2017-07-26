@@ -29,27 +29,28 @@ class LIFNtwk(object):
         # validate arguments
 
         # check syn. dicts have same keys
-        if not set(es_rev) == set(taus_syn) == set(ws_rcr) == set(ws_inp):
+        if not set(es_rev) == set(taus_syn) == set(ws_rcr) == set(ws_up):
             raise ValueError(
-                'All synaptic dicts ("es_rev", "taus_syn", "ws_rcr", "ws_inp") must have same keys.')
+                'All synaptic dicts ("es_rev", "taus_syn", '
+                '"ws_rcr", "ws_inp") must have same keys.'
+            )
 
         self.syns = es_rev.keys()
 
         # check weight matrices have correct dims
-        if (not ws_rcr.values()[0].shape[0] == ws_rcr.values()[0].shape[1]) \
-                or (not all([w.shape == ws_rcr.values()[0].shape for w in ws_rcr.values()])):
+        self.n = list(ws_rcr.values())[0].shape[1]
+
+        if not all([w.shape[0] == w.shape[1] == self.n for w in ws_rcr.values()]):
             raise ValueError('All recurrent weight matrices must be square.')
 
-        self.n = ws_rcr.values()[0].shape[1]
-
         # check input matrices' have correct dims
+        self.n_up = list(ws_up.values())[0].shape[1]
+
         if not all([w.shape[0] == self.n for w in ws_up.values()]):
             raise ValueError('Upstream weight matrices must have one row per neuron.')
 
-        if not all([w.shape[1] == ws_up.values()[0].shape[1] for w in ws_up.values()]):
+        if not all([w.shape[1] == self.n_up for w in ws_up.values()]):
             raise ValueError('All upstream weight matrices must have same number of columns.')
-
-        self.n_up = ws_up.values().shape[1]
 
         # store network params
         self.tau_m = tau_m
@@ -79,7 +80,7 @@ class LIFNtwk(object):
         if type(spks_up) != np.ndarray or spks_up.ndim != 2:
             raise TypeError('"inps_upstream" must be a 2D array.')
 
-        if not spks_up.shape[1] == self.n_inp:
+        if not spks_up.shape[1] == self.n_up:
             raise ValueError('Upstream input size does not match size of input weight matrix.')
 
         if not vs_init.shape == (self.n,):
@@ -127,11 +128,11 @@ class LIFNtwk(object):
             is_g = [gs[syn][step]*(self.es_rev[syn]-vs[step-1]) for syn in self.syns]
 
             # update membrane potential
-            dvs = -(self.dt/self.tau_m) + np.sum(is_g, axis=0)
+            dvs = -(self.dt/self.tau_m) * (vs[step-1] - self.e_leak) + np.sum(is_g, axis=0)
             vs[step] = vs[step-1] + dvs
 
             # force refractory neurons to reset potential
-            vs[rp_ctrs > 0] = self.v_reset
+            vs[step][rp_ctrs > 0] = self.v_reset
 
             # identify spikes
             spks[step] = vs[step] >= self.v_th
@@ -146,13 +147,14 @@ class LIFNtwk(object):
             rp_ctrs[rp_ctrs < 0] = 0
 
         # return NtwkResponse object
-        return NtwkResponse(vs=vs, spks=spks, gs=gs, ws_rcr=self.ws_rcr, ws_up=self.ws_up)
+        return NtwkResponse(ts=ts, vs=vs, spks=spks, gs=gs, ws_rcr=self.ws_rcr, ws_up=self.ws_up)
 
 
 class NtwkResponse(object):
     """
     Class for storing network response parameters.
 
+    :param ts: time vector
     :param vs: membrane potentials
     :param spks: spk times
     :param gs: conductances
@@ -160,15 +162,16 @@ class NtwkResponse(object):
     :param ws_up: upstream weight matrices
     """
 
-    def __init__(self, vs, spks, gs, ws_rcr, ws_up):
+    def __init__(self, ts, vs, spks, gs, ws_rcr, ws_up):
         """Constructor."""
+        self.ts = ts
         self.vs = vs
         self.spks = spks
         self.gs = gs
         self.ws_rcr = ws_rcr
         self.ws_up = ws_up
 
-    def save(self, save_file, save_vs=True, save_spks=True, save_gs=False, save_ws=True):
+    def save(self, time_file, ntwk_file, save_vs=True, save_spks=True, save_gs=False, save_ws=True):
         """
         Save network response to file.
 
