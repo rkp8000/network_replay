@@ -1,8 +1,8 @@
+from copy import copy
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 from plot import set_font_size
-from scipy import signal
 import shelve
 
 
@@ -108,15 +108,8 @@ def ntwk_activity(
         print('Loading timestamps and network activity data...')
         
     # load time stamps
-    data_t = shelve.open(time_file)
-    
-    for key in ('timestamps', 'fs'):
-        if key not in data_t:
-            raise KeyError('Item with key "{}" not found in file "{}".'.format(key, time_file))
-        
-    ts = data_t['timestamps']
-    fs = data_t['fs']
-    
+    ts, fs = load_time_stamps(time_file)
+
     if fps > fs:
         err_msg = ('Provided "fps" value must be smaller than original sampling frequency; '
                'upsampling is not supported.')
@@ -142,7 +135,6 @@ def ntwk_activity(
         
     # downsample data if necessary
     if fps < fs:
-        
         if verbose:
             print('Downsampling data from {} Hz to {} fps...'.format(fs, fps))
         
@@ -180,22 +172,8 @@ def ntwk_activity(
         ]
     
     # automatically adjust box if either dimension is zero
-    if all([b == 0 for b in box]):
-        print('Zero-dimensioned box detected. Adjusting width and height to 1')
-        box = [-0.5, 0.5, -0.5, 0.5]
-        
-    if box[0] == box[1]:
-        print('Zero-width box detected. Adjusting to 1/5 of height.')
-        temp = (box[3] - box[2]) / 5
-        box[0] -= temp/2
-        box[1] += temp/2
-    
-    if box[2] == box[3]:
-        print('Zero-height box detected. Adjusting to 1/5 of width.')
-        temp = (box[1] - box[0]) / 5
-        box[2] -= temp/2
-        box[3] += temp/2
-    
+    box = correct_box_dims(box)
+
     # convert membrane potentials to scatter sizes
     slope = (spiking_size - resting_size) / (v_th - v_rest)
     sizes = slope * (vs - v_rest) + resting_size
@@ -290,15 +268,8 @@ def traj(
     """
     
     # load time stamps
-    data_t = shelve.open(time_file)
-    
-    for key in ('timestamps', 'fs'):
-        if key not in data_t:
-            raise KeyError('Item with key "{}" not found in file "{}".'.format(key, time_file))
-        
-    ts = data_t['timestamps']
-    fs = data_t['fs']
-    
+    ts, fs = load_time_stamps(time_file)
+
     # load trajectory data
     data_tr = shelve.open(traj_file)
     
@@ -309,10 +280,9 @@ def traj(
         
     # downsample data if necessary
     if fps < fs:
-        
-        # positions
         n_down = int(round((ts[-1] - ts[0]) * fps))
         ts = downsample_ma(ts, n_down)
+
         xys = downsample_ma(xys, n_down)
     
     # convert to two 1D arrays
@@ -336,22 +306,8 @@ def traj(
         ]
     
     # automatically adjust box if either dimension is zero
-    if all([b == 0 for b in box]):
-        print('Zero-dimensioned box detected. Adjusting width and height to 1')
-        box = [-0.5, 0.5, -0.5, 0.5]
-        
-    if box[0] == box[1]:
-        print('Zero-width box detected. Adjusting to 1/5 of height.')
-        temp = (box[3] - box[2]) / 5
-        box[0] -= temp/2
-        box[1] += temp/2
-    
-    if box[2] == box[3]:
-        print('Zero-height box detected. Adjusting to 1/5 of width.')
-        temp = (box[1] - box[0]) / 5
-        box[2] -= temp/2
-        box[3] += temp/2
-        
+    box = correct_box_dims(box)
+
     # make sure save directory exists
     save_dir = os.path.dirname(save_prefix)
     if not os.path.exists(save_dir): os.makedirs(save_dir)
@@ -406,3 +362,46 @@ def traj(
     plt.close()
         
     return save_files
+
+
+def load_time_stamps(time_file):
+    """
+    Return the timestamp array and sampling frequency from a timestamp file.
+    :param time_file: path to file containing timestamp array
+    :return: timestamp array, sampling frequency
+    """
+    data_t = shelve.open(time_file)
+
+    for key in ('timestamps', 'fs'):
+        if key not in data_t:
+            raise KeyError('Item with key "{}" not found in file "{}".'.format(key, time_file))
+
+    return data_t['timestamps'], data_t['fs']
+
+
+def correct_box_dims(box):
+    """
+    Check a box (left, right, bottom, top) for zero-valued dimensions and
+    automatically replace them if found.
+    :param box: box dimensions (left, right, bottom, top)
+    :return: corrected box
+    """
+    box = copy(box)
+
+    if all([b == 0 for b in box]):
+        print('Zero-dimensioned box detected. Adjusting width and height to 1')
+        box = [-0.5, 0.5, -0.5, 0.5]
+
+    if box[0] == box[1]:
+        print('Zero-width box detected. Adjusting to 1/5 of height.')
+        temp = (box[3] - box[2]) / 5
+        box[0] -= temp/2
+        box[1] += temp/2
+
+    if box[2] == box[3]:
+        print('Zero-height box detected. Adjusting to 1/5 of width.')
+        temp = (box[1] - box[0]) / 5
+        box[2] -= temp/2
+        box[3] += temp/2
+
+    return box
