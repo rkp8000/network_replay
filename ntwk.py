@@ -1,4 +1,6 @@
 import numpy as np
+import os
+import shelve
 
 
 class LIFNtwk(object):
@@ -20,10 +22,9 @@ class LIFNtwk(object):
     :param ws_rcr: recurrent synaptic weight matrices (dict with keys
         naming synapse types)
     :param ws_up: input synaptic weight matrices from upstream inputs (dict)
-    :param dt: integration time step for dynamics simulation
     """
     
-    def __init__(self, tau_m, e_leak, v_th, v_reset, tau_r, es_rev, taus_syn, ws_rcr, ws_up, dt):
+    def __init__(self, tau_m, e_leak, v_th, v_reset, tau_r, es_rev, taus_syn, ws_rcr, ws_up):
         """Constructor."""
 
         # validate arguments
@@ -62,9 +63,8 @@ class LIFNtwk(object):
         self.taus_syn = taus_syn
         self.ws_rcr = ws_rcr
         self.ws_up = ws_up
-        self.dt = dt
 
-    def run(self, spks_up, vs_init, gs_init):
+    def run(self, spks_up, vs_init, gs_init, dt):
         """
         Run a simulation of the network.
 
@@ -72,6 +72,7 @@ class LIFNtwk(object):
             (should be non-negative integers)
         :param vs_init: initial vs
         :param gs_init: initial gs (dict of 1-D arrays)
+        :param dt: integration time step for dynamics simulation
 
         :return: network response object
         """
@@ -90,7 +91,7 @@ class LIFNtwk(object):
             raise ValueError(
                 'All elements of "gs_init" should be 1-D with one element per neuron.')
 
-        ts = np.arange(len(spks_up))
+        ts = np.arange(len(spks_up)) * dt
 
         # allocate space for results
         sim_shape = (len(ts), self.n)
@@ -119,7 +120,7 @@ class LIFNtwk(object):
                 inps_rcr = w_rcr.dot(spks[step-1].astype(float))
 
                 # decay conductances and add any positive inputs
-                dgs = -(self.dt/tau_syn) * gs[syn][step-1] + inps_up + inps_rcr
+                dgs = -(dt/tau_syn) * gs[syn][step-1] + inps_up + inps_rcr
 
                 # store conductances
                 gs[syn][step] = gs[syn][step-1] + dgs
@@ -128,7 +129,7 @@ class LIFNtwk(object):
             is_g = [gs[syn][step]*(self.es_rev[syn]-vs[step-1]) for syn in self.syns]
 
             # update membrane potential
-            dvs = -(self.dt/self.tau_m) * (vs[step-1] - self.e_leak) + np.sum(is_g, axis=0)
+            dvs = -(dt/self.tau_m) * (vs[step-1] - self.e_leak) + np.sum(is_g, axis=0)
             vs[step] = vs[step-1] + dvs
 
             # force refractory neurons to reset potential
@@ -142,43 +143,93 @@ class LIFNtwk(object):
             # set refractory counters for spiking neurons
             rp_ctrs[spks[step]] = self.tau_r
             # decrement refractory counters for all neurons
-            rp_ctrs -= self.dt
+            rp_ctrs -= dt
             # adjust negative refractory counters up to zero
             rp_ctrs[rp_ctrs < 0] = 0
 
         # return NtwkResponse object
-        return NtwkResponse(ts=ts, vs=vs, spks=spks, gs=gs, ws_rcr=self.ws_rcr, ws_up=self.ws_up)
+        return NtwkResponse(
+            vs=vs, spks=spks, v_rest=self.e_leak, v_th=self.v_th,
+            gs=gs, ws_rcr=self.ws_rcr, ws_up=self.ws_up)
 
 
 class NtwkResponse(object):
     """
     Class for storing network response parameters.
 
-    :param ts: time vector
     :param vs: membrane potentials
     :param spks: spk times
     :param gs: conductances
     :param ws_rcr: recurrent weight matrices
     :param ws_up: upstream weight matrices
+    :param positions: (2 x N) position array
     """
 
-    def __init__(self, ts, vs, spks, gs, ws_rcr, ws_up):
+    def __init__(self, vs, spks, v_rest, v_th, gs, ws_rcr, ws_up, positions=None):
         """Constructor."""
-        self.ts = ts
         self.vs = vs
         self.spks = spks
+        self.v_rest = v_rest
+        self.v_th = v_th
         self.gs = gs
         self.ws_rcr = ws_rcr
         self.ws_up = ws_up
+        self.positions = positions
 
-    def save(self, time_file, ntwk_file, save_vs=True, save_spks=True, save_gs=False, save_ws=True):
+    def save(self, save_file, save_gs=False, save_ws=True, save_positions=True):
         """
         Save network response to file.
 
         :param save_file: path of file to save it to (do not include .db extension)
-        :param save_vs: whether to save membrane potentials
-        :param save_sps: whether to save spikes
         :param save_gs: whether to save conductances
         :param save_ws: whether to save connectivity matrices
+        :param save_positions: whether to save positions
         """
-        pass
+
+        # make sure save directory exists
+        save_dir = os.path.dirname(save_file)
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+
+        # open file and save ntwk activity data
+        data = shelve.open(save_file)
+        data['vs'] = self.vs
+        data['spikes'] = self.spks
+        data['v_rest'] = self.v_rest
+        data['v_th'] = self.v_th
+
+        if save_gs:
+            data['gs'] = self.gs
+
+        if save_ws:
+            data['ws_rcr'] = self.ws_rcr
+            data['ws_up'] = self.ws_up
+
+        if save_positions:
+            data['positions'] = self.positions
+
+        data.close()
+
+        return save_file
+
+
+def save_time_file(save_file, ts):
+    """
+    Save a file containing a set of time stamps. Sampling frequency is computed
+    from the mean time interval in ts.
+
+    :param save_file: path of file to save (do not include .db extension)
+    :param ts: 1D timestamp array
+    """
+    # make sure save directory exists
+    save_dir = os.path.dirname(save_file)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+
+    data = shelve.open(save_file)
+    data['timestamps'] = ts
+    data['fs'] = 1 / np.mean(np.diff(ts))
+
+    data.close()
+
+    return save_file
