@@ -69,7 +69,7 @@ class RandomTraj(object):
             # horizontal
             if xy[0] < box[0]:
                 v[0] *= -1
-                xy[0] = 2*box[0] - x[0]
+                xy[0] = 2*box[0] - xy[0]
 
             elif xy[0] >= box[1]:
                 v[0] *= -1
