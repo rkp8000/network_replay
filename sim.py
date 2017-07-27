@@ -6,28 +6,6 @@ import os
 import shelve
 
 
-def save_time_file(save_file, ts):
-    """
-    Save a file containing a set of time stamps. Sampling frequency is computed
-    from the mean time interval in ts.
-
-    :param save_file: path of file to save (do not include .db extension)
-    :param ts: 1D timestamp array
-    """
-    # make sure save directory exists
-    save_dir = os.path.dirname(save_file)
-    if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-
-    data = shelve.open(save_file)
-    data['timestamps'] = ts
-    data['fs'] = 1 / np.mean(np.diff(ts))
-
-    data.close()
-
-    return save_file
-
-
 class RandomTraj(object):
 
     """

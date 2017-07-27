@@ -2,6 +2,8 @@ from copy import copy
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+
+from aux import load_time_file
 from plot import set_font_size
 import shelve
 
@@ -108,7 +110,7 @@ def ntwk_activity(
         print('Loading timestamps and network activity data...')
         
     # load time stamps
-    ts, fs = load_time_stamps(time_file)
+    ts, fs = load_time_file(time_file)
 
     if fps > fs:
         err_msg = ('Provided "fps" value must be smaller than original sampling frequency; '
@@ -268,7 +270,7 @@ def traj(
     """
     
     # load time stamps
-    ts, fs = load_time_stamps(time_file)
+    ts, fs = load_time_file(time_file)
 
     # load trajectory data
     data_tr = shelve.open(traj_file)
@@ -362,21 +364,6 @@ def traj(
     plt.close()
         
     return save_files
-
-
-def load_time_stamps(time_file):
-    """
-    Return the timestamp array and sampling frequency from a timestamp file.
-    :param time_file: path to file containing timestamp array
-    :return: timestamp array, sampling frequency
-    """
-    data_t = shelve.open(time_file)
-
-    for key in ('timestamps', 'fs'):
-        if key not in data_t:
-            raise KeyError('Item with key "{}" not found in file "{}".'.format(key, time_file))
-
-    return data_t['timestamps'], data_t['fs']
 
 
 def correct_box_dims(box):
