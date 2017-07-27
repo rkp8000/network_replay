@@ -62,3 +62,49 @@ def random_traj(ts, speed, smoothness, x_0, v_0, box):
         vs[step] = v.copy()
 
     return xs, vs
+
+
+def upstream_spikes_from_positions(ts, xs, centers, stds, max_rates):
+    """
+    Generate a set of "upstream" spikes from a trajectory sequence
+    given the tuning curves of the cells.
+
+    Tuning curves are assumed to be squared exponential in shape,
+    specified by centers and widths (corresponding to the mean and
+    std of a 2D Gaussian).
+
+    :param ts: timestamp array
+    :param xs: position array (T x 2)
+    :param centers: tuning curve centers for each neuron (2 x N)
+    :param stds: tuning curve widths for each neuron (N-length array)
+    :param max_rates: spike rate for tuning curve max for each neuron
+    :return: upstream spike trains (T x N)
+    """
+
+    n_steps = len(ts)
+    n = centers.shape[1]
+
+    if not len(xs) == len(ts):
+        raise ValueError('Argument "xs" must have same length as "ts".')
+    if not (stds.ndim == 1 and len(stds) == n):
+        raise ValueError('Argument "stds" must be 1-D length-N array.')
+    if not (max_rates.ndim == 1 and len(max_rates) == n):
+        raise ValueError('Argument "max_rates" must be 1-D length-N array.')
+
+    dt = np.mean(np.diff(ts))
+
+    # get displacement of trajectory to each center over time
+    dxs_1 = np.tile(xs[:, [0]], (1, n)) - np.tile(centers[[0], :], (n_steps, 1))
+    dxs_2 = np.tile(xs[:, [1]], (1, n)) - np.tile(centers[[1], :], (n_steps, 1))
+
+    # get firing rates
+    stds = np.tile(stds[None, :], (n_steps, 1))
+    max_rates = np.tile(max_rates[None, :], (n_steps, 1))
+
+    spk_rates = max_rates * np.exp(-(1/(stds**2)) * (dxs_1**2 + dxs_2**2))
+    mean_spk_cts = spk_rates * dt
+
+    # randomly generate spikes
+    spks = np.random.poisson(mean_spk_cts, mean_spk_cts.shape)
+
+    return spks
