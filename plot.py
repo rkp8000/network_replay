@@ -19,7 +19,7 @@ def set_font_size(ax, font_size, legend_font_size=None):
             text.set_fontsize(legend_font_size)
 
 
-def raster(ax, time_file, activity_file, order, colors='k'):
+def raster(ax, time_file, activity_file, order=None, colors='k'):
     """
     Make a raster plot of spiking activity from a ntwk simulation.
 
