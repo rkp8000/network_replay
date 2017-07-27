@@ -274,7 +274,7 @@ def traj(
     data_tr = shelve.open(traj_file)
     
     if 'xys' not in data_tr:
-        raise KeyError('Item with key "{}" not found in file "{}".'.format('xys', trajectory_file))
+        raise KeyError('Item with key "{}" not found in file "{}".'.format('xys', traj_file))
         
     xys = data_tr['xys']
         
