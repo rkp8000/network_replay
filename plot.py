@@ -1,6 +1,8 @@
 from aux import load_time_file
 import numbers
 import shelve
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
 
 
 def set_font_size(ax, font_size, legend_font_size=None):
