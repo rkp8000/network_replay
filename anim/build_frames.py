@@ -1,4 +1,5 @@
 from copy import copy
+from matplotlib.patches import Ellipse
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -47,7 +48,7 @@ def downsample_ma(xs, num):
     Downsample an array to have num equally spaced samples, where the downsampled
     value at each time point is a moving average of the values in the corresponding window.
     
-    :param xs: 2-D array of values (rows are times, cols are variables)
+    :param xs: N-D array of values (1st dim is times, higher dims are variables)
     :param num: number of time points in the resampled signal
     """
     window = len(xs) / num
@@ -151,8 +152,8 @@ def ntwk_activity(
             print('Data downsampled.')
     
     # extract positions from data or generate random ones
-    if 'positions' in data_a:
-        positions = data_a['positions']
+    if 'place_field_centers' in data_a:
+        positions = data_a['place_field_centers']
     else:
         positions = np.random.normal(0, 1, (2, vs.shape[1]))
         
@@ -246,6 +247,7 @@ def ntwk_activity(
 def traj(
         save_prefix, time_file, traj_file, fps=30, decay=0.5,
         location_size=2000, path_size=200, location_color=(0, 0, 1, .3), path_color=(0, 0, 0),
+        cov_cutoff=None, cov_color=(0, 1, 0, .3), cov_scale=3,
         box=None, title='', x_label='', y_label='', fig_size=(6.4, 4.8),
         show_timestamp=True, font_size=16, verbose=False):
     """
@@ -258,11 +260,17 @@ def traj(
     :param traj_file: shelved file containing the following fields:
         'xys': 2-D array containing (x, y) coordinates of each position over time; rows are
             time points, cols are x and y
+        ['covs']: optional 3-D array containing uncertainty (covariance) matrix at each time
+            point 
     :param fps: frame rate
     :param location_size: size of current location marker
     :param path_size: size of markers indicating recent path
     :param location_color: color of current location marker
     :param path_color: color of markers indicating recent path (note: rgb, not rgba)
+    :param cov_cutoff: maximum covariance value allowed (in squared units) when showing
+        uncertainty ellipse of position estimate; if None, uncertainty ellipse is not shown
+    :param cov_color: rgba color of covariance ellipse
+    :param cov_scale: size of ellipse relative to square root of covariance values
     :param box: bounding box to display path in
     :param show_timestamp: whether or not to show timestamp in figure title
     :param fig_size: size of figure to make
@@ -275,29 +283,41 @@ def traj(
     # load trajectory data
     data_tr = shelve.open(traj_file)
     
+    # make sure traj file contains required keys
     if 'xys' not in data_tr:
-        raise KeyError('Item with key "{}" not found in file "{}".'.format('xys', traj_file))
+        raise KeyError('Item with key "xys" not found in file "{}".'.format(traj_file))
+        
+    if (cov_cutoff is not None) and ('covs' not in data_tr):
+        
+        raise KeyError(
+            'When "cov_cutoff" is not None, key "covs" must be included '
+            'in file "{}".'.format(traj_file))
         
     xys = data_tr['xys']
+    covs = data_tr['covs'] if cov_cutoff is not None else None
         
     # downsample data if necessary
     if fps < fs:
+        
         n_down = int(round((ts[-1] - ts[0]) * fps))
         ts = downsample_ma(ts, n_down)
 
         xys = downsample_ma(xys, n_down)
+        
+        if covs is not None:
+            covs = downsample_ma(covs, n_down)
     
-    # convert to two 1D arrays
+    # convert xys to two 1D arrays
     xs, ys = xys.T
 
     # automatically compute box size if not provided
     if box is None:
-        x_min = xys[:, 0].min()
-        x_max = xys[:, 0].max()
+        x_min = xs.min()
+        x_max = xs.max()
         x_r = x_max - x_min
         
-        y_min = xys[:, 1].min()
-        y_max = xys[:, 1].max()
+        y_min = ys.min()
+        y_max = ys.max()
         y_r = y_max - y_min
         
         box = [
@@ -331,6 +351,16 @@ def traj(
     # plot current position
     sca_2 = ax.scatter(xs[0], ys[0], s=location_size, c=location_color, lw=0, zorder=1)
     
+    # plot uncertainty (covariance) ellipse
+    if covs is not None:
+        unc = ellipse_from_cov(xys[0], covs[0], cov_scale, cov_color)
+        
+        if unc is not None:
+            ax.add_artist(unc)
+            
+            if np.trace(covs[0]) >= cov_cutoff:
+                unc.set_alpha(0)
+    
     # loop over frames
     save_files = []
     
@@ -347,6 +377,19 @@ def traj(
         
         # plot current location
         sca_2.set_offsets([x, y])
+        
+        # plot covariance ellipse
+        if covs is not None:
+            if unc is not None:
+                unc.remove()
+                
+            unc = ellipse_from_cov([x, y], covs[f_ctr], cov_scale, cov_color)
+        
+            if unc is not None:
+                ax.add_artist(unc)
+
+                if np.trace(covs[f_ctr]) >= cov_cutoff:
+                    unc.set_alpha(0)
         
         if show_timestamp:
             if title:
@@ -392,3 +435,26 @@ def correct_box_dims(box):
         box[3] += temp/2
 
     return box
+                        
+
+def ellipse_from_cov(xy, cov, scale, color):
+    """
+    Return an ellipse object from a covariance matrix. Add it to an axis
+    using ax.add_artist(ell), and remove it using ell.remove().
+    
+    :param cov: 2x2 covariance matrix
+    :param scale: how much to scale the covariance stds to get width and height
+    :param color: rgba color of ellipse
+    :return: ellipse object
+    """
+    if np.any(np.isnan(xy)) or np.any(np.isnan(cov)) or (np.trace(cov) == 0):
+        return None
+    
+    evs, evecs = np.linalg.eig(cov)
+        
+    width, height = scale*np.sqrt(evs)
+    angle = -np.arctan(evecs[0, 1]/evecs[0, 0]) * 180 / np.pi
+        
+    ell = Ellipse(xy, width=width, height=height, color=color)        
+    
+    return ell
