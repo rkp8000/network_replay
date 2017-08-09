@@ -181,7 +181,11 @@ class InferredTraj(object):
             # get position means and covariances, weighted by spike counts
             if np.any(spk_cts):
                 xy = np.average(place_field_centers, axis=1, weights=spk_cts)
-                cov = np.cov(place_field_centers, fweights=spk_cts)
+                
+                if spk_cts.sum() == 1:
+                    cov = np.zeros((2, 2))
+                else:
+                    cov = np.cov(place_field_centers, fweights=spk_cts)
             else:
                 xy = np.nan * np.zeros(2)
                 cov = np.nan * np.zeros((2, 2))
