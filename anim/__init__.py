@@ -85,17 +85,17 @@ def merge_frames(frame_sets, save_prefix, rects, size, size_rel_to=1, delete_ori
     return save_files
     
 
-def create_gif(files, save_file, playback_fps, delete_originals=False, verbose=False):
+def create_movie(files, save_file, playback_fps, delete_originals=False, verbose=False):
     """
-    Create a gif from a sequence of image files.
+    Create an MP4 movie from a sequence of image files.
     
-    :param files: ordered list of paths to files to be merged into gif
-    :param save_file: prefix (without ".gif") of file to save gif to
-    :param playback_fps: fps of gif given files (max 30 Hz)
-    :param delete_originals: whether to delete files used to make original gif
+    :param files: ordered list of paths to files to be merged into MP4
+    :param save_file: prefix (without ".mp4") of file to save MP4 to
+    :param playback_fps: fps of MP4 given files (max 30 Hz)
+    :param delete_originals: whether to delete files used to make original MP4
     :param verbose: whether to print out progress
     """
-          
+    
     if playback_fps > 30:
         print('Warning: playback rates > 30 Hz are usually rendered incorrectly')
         
@@ -110,12 +110,12 @@ def create_gif(files, save_file, playback_fps, delete_originals=False, verbose=F
     
     if verbose:
         print('Source images loaded.')
-        print('Generating gif...')
+        print('Generating movie and saving at "{}"...'.format(save_file + '.mp4'))
         
-    imageio.mimsave(save_file + '.gif', images, fps=playback_fps)
+    imageio.mimsave(save_file + '.mp4', images, fps=playback_fps)
     
     if verbose:
-        print('Gif generated.')
+        print('Movie generated.')
     
     if delete_originals:
         if verbose:
@@ -127,4 +127,4 @@ def create_gif(files, save_file, playback_fps, delete_originals=False, verbose=F
         if verbose:
             print('Originals deleted.')
             
-    return save_file + '.gif'
+    return save_file + '.mp4'
