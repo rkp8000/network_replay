@@ -191,6 +191,10 @@ class NtwkResponse(object):
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
+        # delete data file if it already exists
+        if os.path.exists(save_file + '.db'):
+            os.remove(save_file + '.db')
+            
         # open file and save ntwk activity data
         data = shelve.open(save_file)
         data['vs'] = self.vs

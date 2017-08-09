@@ -16,6 +16,10 @@ def save_time_file(save_file, ts):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
+    # delete file if it already exists
+    if os.path.exists(save_file + '.db'):
+        os.remove(save_file + '.db')
+    
     data = shelve.open(save_file)
     data['timestamps'] = ts
     data['fs'] = 1 / np.mean(np.diff(ts))
