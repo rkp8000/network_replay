@@ -5,6 +5,8 @@ import numpy as np
 import os
 import shelve
 
+from aux import load_time_file
+
 
 class RandomTraj(object):
 
@@ -13,7 +15,7 @@ class RandomTraj(object):
     :param ts: timestamp vector
     :param speed: STD of expected speed distribution (m/s)
     :param smoothness: timescale of velocity changes (s)
-    :param x_0: starting location (length-2 array) (m)
+    :param xy_0: starting location (length-2 array) (m)
     :param v_0: starting velocity (length-2 array) (m/s)
     :param box: box boundaries (left, right, bottom, top) (m)
     :return: position sequence, velocity sequence
@@ -133,3 +135,99 @@ def upstream_spikes_from_positions(ts, xys, centers, stds, max_rates):
     spks = np.random.poisson(mean_spk_cts, mean_spk_cts.shape)
 
     return spks
+
+
+class InferredTraj(object):
+    """
+    Trajectory inferred from network activity.
+    
+    :param ntwk_file: path to network activity file
+    :param time_file: path to timestamp file
+    :param window: time window for calculating positions in (s)
+    """
+    
+    @staticmethod
+    def infer_positions(ts, spks, window, place_field_centers):
+        """
+        Infer a sequence of positions and uncertainties from
+        the spike trains of a set of place cells and their place field centers.
+        
+        :param ts: timestamp sequence
+        :param spks: multi-cell spike train (rows are time points, cols are cells)
+        :param window: length of window (s) to use to count spikes over
+        :param place_field_centers: place-field centers of all cells
+            (rows are x, y; cols are cells)
+        """
+        if not len(ts) == len(spks):
+            raise ValueError('Spike array must be same length as timestamp array.')
+        
+        if not spks.shape[1] == place_field_centers.shape[1]:
+            raise ValueError('Spike array must have same cols as place_field_centers.')
+            
+        if not place_field_centers.shape[0] == 2:
+            raise ValueError('Place field centers must have 2 rows.')
+        
+        # loop over all windows
+        xys = np.nan * np.zeros((len(ts), 2))
+        covs = np.nan * np.zeros((len(ts), 2, 2))
+        
+        for start in np.arange(0, ts[-1], window):
+            end = start + window
+            mask = (ts >= start) & (ts < end)
+            
+            # get spike counts for this window
+            spk_cts = spks[mask].sum(axis=0)
+            
+            # get position means and covariances, weighted by spike counts
+            if np.any(spk_cts):
+                xy = np.average(place_field_centers, axis=1, weights=spk_cts)
+                cov = np.cov(place_field_centers, fweights=spk_cts)
+            else:
+                xy = np.nan * np.zeros(2)
+                cov = np.nan * np.zeros((2, 2))
+            
+            # store results
+            xys[mask] = xy
+            covs[mask] = cov
+            
+        return xys, covs
+        
+    
+    def __init__(self, ntwk_file, time_file, window):
+        """Constructor."""
+        self.ntwk_file = ntwk_file
+        self.time_file = time_file
+        self.window = window
+        
+        # extract timestamps
+        ts = load_time_file(time_file)[0]
+        
+        # extract place-field centers and spike counts
+        data = shelve.open(ntwk_file)
+        
+        if ('spikes' not in data) or ('place_field_centers' not in data):
+            raise KeyError(
+                'Network activity file must contain spiking activity '
+                'and place field centers.'
+            )
+        
+        xys, covs = self.infer_positions(
+            ts, data['spikes'], window, data['place_field_centers'])
+        
+        data.close()
+        
+        self.xys = xys
+        self.covs = covs
+        
+    def save(self, save_file):
+        """
+        Save inferred position sequence to file.
+        
+        :param save_file: path to save file
+        """
+        data = shelve.open(save_file)
+        data['xys'] = self.xys
+        data['covs'] = self.covs
+        data.close()
+        
+        return save_file
