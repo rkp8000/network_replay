@@ -450,11 +450,16 @@ def ellipse_from_cov(xy, cov, scale, color):
     if np.any(np.isnan(xy)) or np.any(np.isnan(cov)) or (np.trace(cov) == 0):
         return None
     
+    # get eigenvalues and vectors of covariance
     evs, evecs = np.linalg.eig(cov)
-        
+    
+    # correct evs for small numerical errors
+    evs = np.max([np.real(evs), [0, 0]], axis=0)
+    
+    # convert evs and evecs to ellipse parameters
     width, height = scale*np.sqrt(evs)
     angle = -np.arctan(evecs[0, 1]/evecs[0, 0]) * 180 / np.pi
         
-    ell = Ellipse(xy, width=width, height=height, color=color)        
+    ell = Ellipse(xy, width=width, height=height, angle=angle, color=color)        
     
     return ell
