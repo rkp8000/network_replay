@@ -11,28 +11,28 @@ class LIFNtwk(object):
 
     In all weight matrices, rows index target, cols index source.
     
-    :param tau_m: membrane time constant
+    :param t_m: membrane time constant
     :param e_leak: leak reversal potential
     :param v_th: firing threshold potential
     :param v_reset: reset potential
-    :param tau_r: refractory time
+    :param t_r: refractory time
     :param es_rev: synaptic reversal potentials (dict with keys naming
         synapse types, e.g., 'AMPA', 'NMDA', ...)
-    :param taus_syn: synaptic time constants (dict)
+    :param ts_syn: synaptic time constants (dict)
     :param ws_rcr: recurrent synaptic weight matrices (dict with keys
         naming synapse types)
     :param ws_up: input synaptic weight matrices from upstream inputs (dict)
     """
     
-    def __init__(self, tau_m, e_leak, v_th, v_reset, tau_r, es_rev, taus_syn, ws_rcr, ws_up):
+    def __init__(self, t_m, e_leak, v_th, v_reset, t_r, es_rev, ts_syn, ws_rcr, ws_up):
         """Constructor."""
 
         # validate arguments
 
         # check syn. dicts have same keys
-        if not set(es_rev) == set(taus_syn) == set(ws_rcr) == set(ws_up):
+        if not set(es_rev) == set(ts_syn) == set(ws_rcr) == set(ws_up):
             raise ValueError(
-                'All synaptic dicts ("es_rev", "taus_syn", '
+                'All synaptic dicts ("es_rev", "ts_syn", '
                 '"ws_rcr", "ws_inp") must have same keys.'
             )
 
@@ -54,13 +54,13 @@ class LIFNtwk(object):
             raise ValueError('All upstream weight matrices must have same number of columns.')
 
         # store network params
-        self.tau_m = tau_m
+        self.t_m = t_m
         self.e_leak = e_leak
         self.v_th = v_th
         self.v_reset = v_reset
-        self.tau_r = tau_r
+        self.t_r = t_r
         self.es_rev = es_rev
-        self.taus_syn = taus_syn
+        self.ts_syn = ts_syn
         self.ws_rcr = ws_rcr
         self.ws_up = ws_up
 
@@ -113,14 +113,14 @@ class LIFNtwk(object):
 
                 w_up = self.ws_up[syn]
                 w_rcr = self.ws_rcr[syn]
-                tau_syn = self.taus_syn[syn]
+                t_syn = self.ts_syn[syn]
 
                 # calculate upstream and recurrent inputs to conductances
                 inps_up = w_up.dot(spks_up[step])
                 inps_rcr = w_rcr.dot(spks[step-1].astype(float))
 
                 # decay conductances and add any positive inputs
-                dgs = -(dt/tau_syn) * gs[syn][step-1] + inps_up + inps_rcr
+                dgs = -(dt/t_syn) * gs[syn][step-1] + inps_up + inps_rcr
 
                 # store conductances
                 gs[syn][step] = gs[syn][step-1] + dgs
@@ -129,7 +129,7 @@ class LIFNtwk(object):
             is_g = [gs[syn][step]*(self.es_rev[syn]-vs[step-1]) for syn in self.syns]
 
             # update membrane potential
-            dvs = -(dt/self.tau_m) * (vs[step-1] - self.e_leak) + np.sum(is_g, axis=0)
+            dvs = -(dt/self.t_m) * (vs[step-1] - self.e_leak) + np.sum(is_g, axis=0)
             vs[step] = vs[step-1] + dvs
 
             # force refractory neurons to reset potential
@@ -141,7 +141,7 @@ class LIFNtwk(object):
             vs[step][spks[step]] = self.v_reset
 
             # set refractory counters for spiking neurons
-            rp_ctrs[spks[step]] = self.tau_r
+            rp_ctrs[spks[step]] = self.t_r
             # decrement refractory counters for all neurons
             rp_ctrs -= dt
             # adjust negative refractory counters up to zero
@@ -165,7 +165,7 @@ class NtwkResponse(object):
     :param positions: (2 x N) position array
     """
 
-    def __init__(self, vs, spks, v_rest, v_th, gs, ws_rcr, ws_up, positions=None):
+    def __init__(self, vs, spks, v_rest, v_th, gs, ws_rcr, ws_up, place_field_centers=None):
         """Constructor."""
         self.vs = vs
         self.spks = spks
@@ -174,9 +174,9 @@ class NtwkResponse(object):
         self.gs = gs
         self.ws_rcr = ws_rcr
         self.ws_up = ws_up
-        self.positions = positions
+        self.place_field_centers = place_field_centers
 
-    def save(self, save_file, save_gs=False, save_ws=True, save_positions=True):
+    def save(self, save_file, save_gs=False, save_ws=True, save_place_fields=True):
         """
         Save network response to file.
 
@@ -205,12 +205,9 @@ class NtwkResponse(object):
             data['ws_rcr'] = self.ws_rcr
             data['ws_up'] = self.ws_up
 
-        if save_positions:
-            data['positions'] = self.positions
+        if save_place_fields:
+            data['place_field_centers'] = self.place_field_centers
 
         data.close()
 
         return save_file
-
-
-
