@@ -1,5 +1,5 @@
 """
-Code for aspects of simulation not directly related to network dynamics.
+Code for trajectory-related simulation components.
 """
 import numpy as np
 import os
@@ -95,7 +95,7 @@ class RandomTraj(object):
         return save_file
 
 
-def upstream_spikes_from_positions(ts, xys, centers, stds, max_rates):
+def upstream_spikes_from_traj(ts, xys, centers, stds, max_rates):
     """
     Generate a set of "upstream" spikes from a trajectory sequence
     given the tuning curves of the cells.
