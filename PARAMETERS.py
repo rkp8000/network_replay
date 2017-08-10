@@ -8,8 +8,8 @@ BOX_R = 1  # (m)
 BOX_B = -0.5  # (m)
 BOX_T = 0.5  # (m)
 
-S_TRJ = 0.2  # (m/s)
-T_TRJ = 1  # (s)
+S_TRAJ = 0.2  # (m/s)
+T_TRAJ = 1  # (s)
 
 X_0 = -0.9  # (m)
 Y_0 = -0.4  # (m)
