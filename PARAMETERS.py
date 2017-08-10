@@ -30,10 +30,10 @@ P_N_EC_CA3 = 0.01
 W_A_CA3_CA3 = 0
 W_N_CA3_CA3 = 0
 
-W_A_EC_CA3_I = 0.008
-W_A_EC_CA3_F = 0.017
+W_A_EC_CA3 = 0
 
-W_N_EC_CA3 = 0
+W_N_EC_CA3_I = 0.00065
+W_N_EC_CA3_F = 0.00135
 
 W_A_PL_CA3 = 0.017
 W_N_PL_CA3 = 0
@@ -53,9 +53,9 @@ E_AMPA = 0  # (V)
 E_NMDA = 0  # (V)
 E_GABA = -0.08  # (V)
 
-T_AMPA = 0.002  # (V)
-T_NMDA = None
-T_GABA = None
+T_AMPA = 0.002  # (s)
+T_NMDA = 0.08  # (s)
+T_GABA = 0.005  # (s)
 
 # EC-CA3 PLASTICITY
 T_W = 1  # (s)
