@@ -345,9 +345,6 @@ def traj(
     
     set_font_size(ax, font_size)
     
-    # plot all points with zero opacity
-    sca = ax.scatter(xs, ys, s=path_size, c=(path_color + (0,)), lw=0, zorder=0)
-    
     # plot current position
     sca_2 = ax.scatter(xs[0], ys[0], s=location_size, c=location_color, lw=0, zorder=1)
     
@@ -367,14 +364,12 @@ def traj(
     for f_ctr, (t, (x, y)) in enumerate(zip(ts, xys)):
         
         # get opacities of trailing path
-        alphas = np.exp((ts - t)/decay)
-        alphas[ts > t] = 0
+        alphas = np.exp((ts[:f_ctr+1] - t)/decay)
         
         # plot trailing path
         colors = [path_color + (alpha,) for alpha in alphas]
+        sca = ax.scatter(xs[:f_ctr+1], ys[:f_ctr+1], s=path_size, color=colors, lw=0, zorder=0)
             
-        sca.set_color(colors)
-        
         # plot current location
         sca_2.set_offsets([x, y])
         
@@ -403,6 +398,9 @@ def traj(
         save_files.append(save_file)
         
         fig.savefig(save_file)
+        
+        # remove trailing path so it doesn't interfere with next frame
+        sca.remove()
         
     plt.close()
         
