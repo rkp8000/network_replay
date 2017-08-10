@@ -75,8 +75,8 @@ def downsample_ma(xs, num):
 
 
 def ntwk_activity(
-        save_prefix, time_file, activity_file, fps=30, resting_size=50, spiking_size=1000,
-        default_color=(0, 0, 0), spiking_color=(1, 0, 0), frames_per_spk=5,
+        save_prefix, time_file, activity_file, fps=30, resting_size=50, spk_size=1000,
+        default_color=(0, 0, 0), spking_color=(1, 0, 0), frames_per_spk=5,
         box=None, title='', x_label='', y_label='', show_timestamp=True,
         fig_size=(6.4, 4.8), font_size=16, verbose=False):
     """
@@ -96,9 +96,9 @@ def ntwk_activity(
         'v_th': threshold membrane potential (in V)
     :param fps: frame rate
     :param resting_size: size of neurons at rest
-    :param spiking_size: size of neurons when they've reached spiking threshold
+    :param spk_size: size of neurons when they've reached spking threshold
     :param default_color: neuron color
-    :param spiking_color: color of neuron when spiking
+    :param spking_color: color of neuron when spking
     :param box: bounding box to display neurons in: (x_min, x_max, y_min, y_max)
     :param show_timestamp: whether or not to show timestamp in figure title
     :param fig_size: size of figure to make
@@ -178,7 +178,7 @@ def ntwk_activity(
     box = correct_box_dims(box)
 
     # convert membrane potentials to scatter sizes
-    slope = (spiking_size - resting_size) / (v_th - v_rest)
+    slope = (spk_size - resting_size) / (v_th - v_rest)
     sizes = slope * (vs - v_rest) + resting_size
     
     # make sure save directory exists
@@ -207,18 +207,18 @@ def ntwk_activity(
     
     for f_ctr, (t, sizes_, spks_) in enumerate(zip(ts, sizes, spks)):
         
-        # set colors according to spiking
+        # set colors according to spking
         spk_offset_ctr[spks_] = frames_per_spk
         
         # set colors
         if not any(spk_offset_ctr):
             sca.set_color(default_color)
         else:
-            colors = [spiking_color if s else default_color for s in spk_offset_ctr]
+            colors = [spking_color if s else default_color for s in spk_offset_ctr]
             sca.set_color(colors)
             
-        # set sizes of non-spiking neurons
-        sizes_[spk_offset_ctr > 0] = spiking_size
+        # set sizes of non-spking neurons
+        sizes_[spk_offset_ctr > 0] = spk_size
         sca.set_sizes(sizes_)
         
         if show_timestamp:
