@@ -95,9 +95,9 @@ class RandomTraj(object):
         return save_file
 
 
-def upstream_spikes_from_traj(ts, xys, centers, stds, max_rates):
+def upstream_spks_from_traj(ts, xys, centers, stds, max_rates):
     """
-    Generate a set of "upstream" spikes from a trajectory sequence
+    Generate a set of "upstream" spks from a trajectory sequence
     given the tuning curves of the cells.
 
     Tuning curves are assumed to be squared exponential in shape,
@@ -108,8 +108,8 @@ def upstream_spikes_from_traj(ts, xys, centers, stds, max_rates):
     :param xys: position array (T x 2)
     :param centers: tuning curve centers for each neuron (2 x N)
     :param stds: tuning curve widths for each neuron (N-length array)
-    :param max_rates: spike rate for tuning curve max for each neuron
-    :return: upstream spike trains (T x N)
+    :param max_rates: spk rate for tuning curve max for each neuron
+    :return: upstream spk trains (T x N)
     """
 
     n_steps = len(ts)
@@ -135,7 +135,7 @@ def upstream_spikes_from_traj(ts, xys, centers, stds, max_rates):
     spk_rates = max_rates * np.exp(-(1/(stds**2)) * (dxs_1**2 + dxs_2**2))
     mean_spk_cts = spk_rates * dt
 
-    # randomly generate spikes
+    # randomly generate spks
     spks = np.random.poisson(mean_spk_cts, mean_spk_cts.shape)
 
     return spks
@@ -154,19 +154,19 @@ class InferredTraj(object):
     def infer_positions(ts, spks, window, place_field_centers):
         """
         Infer a sequence of positions and uncertainties from
-        the spike trains of a set of place cells and their place field centers.
+        the spk trains of a set of place cells and their place field centers.
         
         :param ts: timestamp sequence
-        :param spks: multi-cell spike train (rows are time points, cols are cells)
-        :param window: length of window (s) to use to count spikes over
+        :param spks: multi-cell spk train (rows are time points, cols are cells)
+        :param window: length of window (s) to use to count spks over
         :param place_field_centers: place-field centers of all cells
             (rows are x, y; cols are cells)
         """
         if not len(ts) == len(spks):
-            raise ValueError('Spike array must be same length as timestamp array.')
+            raise ValueError('spk array must be same length as timestamp array.')
         
         if not spks.shape[1] == place_field_centers.shape[1]:
-            raise ValueError('Spike array must have same cols as place_field_centers.')
+            raise ValueError('spk array must have same cols as place_field_centers.')
             
         if not place_field_centers.shape[0] == 2:
             raise ValueError('Place field centers must have 2 rows.')
@@ -179,10 +179,10 @@ class InferredTraj(object):
             end = start + window
             mask = (ts >= start) & (ts < end)
             
-            # get spike counts for this window
+            # get spk counts for this window
             spk_cts = spks[mask].sum(axis=0)
             
-            # get position means and covariances, weighted by spike counts
+            # get position means and covariances, weighted by spk counts
             if np.any(spk_cts):
                 xy = np.average(place_field_centers, axis=1, weights=spk_cts)
                 
@@ -210,17 +210,17 @@ class InferredTraj(object):
         # extract timestamps
         ts = load_time_file(time_file)[0]
         
-        # extract place-field centers and spike counts
+        # extract place-field centers and spk counts
         data = shelve.open(ntwk_file)
         
-        if ('spikes' not in data) or ('place_field_centers' not in data):
+        if ('spks' not in data) or ('place_field_centers' not in data):
             raise KeyError(
                 'Network activity file must contain spiking activity '
                 'and place field centers.'
             )
         
         xys, covs = self.infer_positions(
-            ts, data['spikes'], window, data['place_field_centers'])
+            ts, data['spks'], window, data['place_field_centers'])
         
         data.close()
         

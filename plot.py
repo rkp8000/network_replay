@@ -39,10 +39,10 @@ def raster(ax, time_file, activity_file, order=None, colors='k'):
 
     # check arguments
     if order is None:
-        spks = data['spikes']
+        spks = data['spks']
         order = range(spks.shape[1])
     else:
-        spks = data['spikes'][:, order]
+        spks = data['spks'][:, order]
 
     if len(colors) > 1 and not isinstance(colors[0], numbers.Number):
         # i.e., if colors is a sequence of colors
@@ -51,7 +51,7 @@ def raster(ax, time_file, activity_file, order=None, colors='k'):
     else:
         colors = [colors] * len(order)
 
-    # plot spikes
+    # plot spks
     spk_times, spk_rows = spks.nonzero()
     spk_times = spk_times/fs
 

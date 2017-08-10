@@ -135,7 +135,7 @@ class LIFNtwk(object):
             # force refractory neurons to reset potential
             vs[step][rp_ctrs > 0] = self.v_reset
 
-            # identify spikes
+            # identify spks
             spks[step] = vs[step] >= self.v_th
             # reset membrane potentials of spiking neurons
             vs[step][spks[step]] = self.v_reset
@@ -198,7 +198,7 @@ class NtwkResponse(object):
         # open file and save ntwk activity data
         data = shelve.open(save_file)
         data['vs'] = self.vs
-        data['spikes'] = self.spks
+        data['spks'] = self.spks
         data['v_rest'] = self.v_rest
         data['v_th'] = self.v_th
 

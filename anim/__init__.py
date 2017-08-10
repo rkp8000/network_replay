@@ -85,7 +85,7 @@ def merge_frames(frame_sets, save_prefix, rects, size, size_rel_to=1, delete_ori
     return save_files
     
 
-def create_movie(files, save_file, playback_fps, delete_originals=False, verbose=False):
+def create_mp4(files, save_file, playback_fps, delete_originals=False, verbose=False):
     """
     Create an MP4 movie from a sequence of image files.
     

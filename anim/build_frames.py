@@ -9,26 +9,26 @@ from plot import set_font_size
 import shelve
 
 
-def downsample_spikes(spikes, num):
+def downsample_spks(spks, num):
     """
-    Downsample a vector spike train to have num equally spaced samples.
-    The downsampled spike value at a given time point is True if any spike occurred
+    Downsample a vector spk train to have num equally spaced samples.
+    The downsampled spk value at a given time point is True if any spk occurred
     in the window surrounding that time point, and zero otherwise.
     
-    :param spikes: 2-D logical array indicating spike times (rows are times, cols
+    :param spks: 2-D logical array indicating spk times (rows are times, cols
         are neurons)
     :param num: number of time points in the resampled signal
     """
-    window = len(spikes) / num
+    window = len(spks) / num
     
     if window < 1:
-        err_msg = ('Provided "num" value must be less than len(spikes); '
+        err_msg = ('Provided "num" value must be less than len(spks); '
                    'upsampling is not supported')
         raise ValueError(err_msg)
     
     # just use a loop for now
     
-    spikes_down = np.zeros((num, spikes.shape[1]), dtype=bool)
+    spks_down = np.zeros((num, spks.shape[1]), dtype=bool)
     
     for f_ctr in range(num):
         
@@ -37,10 +37,10 @@ def downsample_spikes(spikes, num):
         end = int(round(window * (f_ctr + 1)))
         
         # assign the downsampled value to True for each neuron in which
-        # any spike occurred in this time window
-        spikes_down[f_ctr] = np.any(spikes[start:end], axis=0)
+        # any spk occurred in this time window
+        spks_down[f_ctr] = np.any(spks[start:end], axis=0)
     
-    return spikes_down
+    return spks_down
 
 
 def downsample_ma(xs, num):
@@ -76,11 +76,11 @@ def downsample_ma(xs, num):
 
 def ntwk_activity(
         save_prefix, time_file, activity_file, fps=30, resting_size=50, spiking_size=1000,
-        default_color=(0, 0, 0), spiking_color=(1, 0, 0), frames_per_spike=5,
+        default_color=(0, 0, 0), spiking_color=(1, 0, 0), frames_per_spk=5,
         box=None, title='', x_label='', y_label='', show_timestamp=True,
         fig_size=(6.4, 4.8), font_size=16, verbose=False):
     """
-    Convert a time-series of membrane potentials and spikes into viewable frames.
+    Convert a time-series of membrane potentials and spks into viewable frames.
     
     :param save_prefix: prefix of frame files
     :param time_file: shelved file containing the following fields:
@@ -89,7 +89,7 @@ def ntwk_activity(
     :param activity_file: shelved file containing the following fields:
         'vs': 2-D array containing membrane potential values (in V) where rows are time points
             and cols are neurons
-        'spikes': 2-D logical array indicating spike times of individual neurons
+        'spks': 2-D logical array indicating spk times of individual neurons
         'positions': 2-D array containing (x, y) positions of neurons (cols are neurons)
         'w': square matrix indicating recurrent connection weights among neurons
         'v_rest': resting membrane potential (in V)
@@ -121,17 +121,17 @@ def ntwk_activity(
     # load activity data
     data_a = shelve.open(activity_file)
     
-    for key in ('vs', 'spikes', 'v_rest', 'v_th'):
+    for key in ('vs', 'spks', 'v_rest', 'v_th'):
         if key not in data_a:
             raise KeyError('Item with key "{}" not found in file "{}".'.format(key, activity_file))
             
     vs = data_a['vs']
-    spikes = data_a['spikes']
+    spks = data_a['spks']
     v_rest = data_a['v_rest']
     v_th = data_a['v_th']
     
     # make sure timestamp vector is same length as activity vectors
-    assert len(ts) == len(vs) == len(spikes)
+    assert len(ts) == len(vs) == len(spks)
     
     if verbose:
         print('Data loaded.')
@@ -144,9 +144,9 @@ def ntwk_activity(
         n_down = int(round((ts[-1] - ts[0]) * fps))
         ts = downsample_ma(ts, n_down)
         
-        # membrane potential and spikes
+        # membrane potential and spks
         vs = downsample_ma(vs, n_down)
-        spikes = downsample_spikes(spikes, n_down)
+        spks = downsample_spks(spks, n_down)
     
         if verbose:
             print('Data downsampled.')
@@ -203,22 +203,22 @@ def ntwk_activity(
         print('Generating and saving {} frames...'.format(len(ts)))
         
     save_files = []
-    spike_offset_ctr = np.zeros(spikes.shape[1], dtype=int)
+    spk_offset_ctr = np.zeros(spks.shape[1], dtype=int)
     
-    for f_ctr, (t, sizes_, spikes_) in enumerate(zip(ts, sizes, spikes)):
+    for f_ctr, (t, sizes_, spks_) in enumerate(zip(ts, sizes, spks)):
         
         # set colors according to spiking
-        spike_offset_ctr[spikes_] = frames_per_spike
+        spk_offset_ctr[spks_] = frames_per_spk
         
         # set colors
-        if not any(spike_offset_ctr):
+        if not any(spk_offset_ctr):
             sca.set_color(default_color)
         else:
-            colors = [spiking_color if s else default_color for s in spike_offset_ctr]
+            colors = [spiking_color if s else default_color for s in spk_offset_ctr]
             sca.set_color(colors)
             
         # set sizes of non-spiking neurons
-        sizes_[spike_offset_ctr > 0] = spiking_size
+        sizes_[spk_offset_ctr > 0] = spiking_size
         sca.set_sizes(sizes_)
         
         if show_timestamp:
@@ -229,7 +229,7 @@ def ntwk_activity(
             
         plt.draw()
         
-        spike_offset_ctr[spike_offset_ctr > 0] -= 1
+        spk_offset_ctr[spk_offset_ctr > 0] -= 1
         
         save_file = '{}_{}.png'.format(save_prefix, f_ctr+1)
         save_files.append(save_file)
