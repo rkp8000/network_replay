@@ -1,3 +1,4 @@
+from copy import deepcopy
 import numpy as np
 import os
 import shelve
@@ -22,9 +23,19 @@ class LIFNtwk(object):
     :param ws_rcr: recurrent synaptic weight matrices (dict with keys
         naming synapse types)
     :param ws_up: input synaptic weight matrices from upstream inputs (dict)
+    :param plasticity: dict of plasticity params with the following keys:
+        'masks': synaptic dict of boolean arrays indicating which synapses in 
+            ws_up are plastic, i.e., which synapses correspond to ECII-CA3 cxns
+        'w_ec_ca3_maxs': synaptic dict of max values for plastic weights
+        'T_W': timescale of activity-dependent plasticity
+        'T_C': timescale of CA3 spike-counter auxiliary variable
+        'C_S': threshold for spike-count-based plasticity activation
+        'BETA_C': slope of spike-count nonlinearity
     """
     
-    def __init__(self, t_m, e_leak, v_th, v_reset, t_r, es_rev, ts_syn, ws_rcr, ws_up):
+    def __init__(self,
+            t_m, e_leak, v_th, v_reset, t_r,
+            es_rev, ts_syn, ws_rcr, ws_up, plasticity=None):
         """Constructor."""
 
         # validate arguments
@@ -53,6 +64,34 @@ class LIFNtwk(object):
         if not all([w.shape[1] == self.n_up for w in ws_up.values()]):
             raise ValueError('All upstream weight matrices must have same number of columns.')
 
+        # check plasticity parameters
+        if plasticity is not None:
+            # make sure all parameters are given
+            if set(plasticity) != {'masks', 'w_ec_ca3_maxs', 'T_W', 'T_C', 'C_S', 'BETA_C'}:
+                raise KeyError(
+                    'Argument "plasticity" must contain the correct keys '
+                    '(see LIFNtwk documentation).')
+            # make sure there is one plasticity matrix for each synapse type
+            if set(plasticity['masks']) != set(ws_up):
+                raise KeyError(
+                    'Argument "plasticity[\'masks\']" must contain same keys '
+                    '(synapse types) as argument "ws_up".')
+            # make sure plasticity matrices are boolean and same size as ws_up
+            for w in plasticity['masks'].values():
+                if w.shape != (self.n, self.n_up):
+                    raise ValueError(
+                        'All matrices in "plasticity[\'masks\']" must have same '
+                        'shape as matrices in "ws_up".')
+                if w.dtype != bool:
+                    raise TypeError(
+                        'All matrices in "plasticity[\'masks\']" must be '
+                        'logical arrays.')
+            # make sure max weight values dict has correct synaptic keys
+            if set(plasticity['w_ec_ca3_maxs']) != set(ws_up):
+                raise KeyError(
+                    'Argument "plasticity[\'w_ec_ca3_maxs\']" must contain same '
+                    'keys (synapse types) as argument "ws_up".')
+                    
         # store network params
         self.t_m = t_m
         self.e_leak = e_leak
@@ -62,7 +101,10 @@ class LIFNtwk(object):
         self.es_rev = es_rev
         self.ts_syn = ts_syn
         self.ws_rcr = ws_rcr
-        self.ws_up = ws_up
+        self.ws_up_init = ws_up
+        self.plasticity = plasticity
+        if plasticity is not None:
+            self.ns_plastic = {syn: w.sum() for syn, w in plasticity['masks'].items()}
 
     def run(self, spks_up, vs_init, gs_init, dt):
         """
@@ -93,25 +135,55 @@ class LIFNtwk(object):
 
         ts = np.arange(len(spks_up)) * dt
 
-        # allocate space for results
+        # allocate space for dynamics results
         sim_shape = (len(ts), self.n)
         vs = np.nan * np.zeros(sim_shape)
         spks = np.zeros(sim_shape, dtype=bool)
         gs = {syn: np.nan * np.zeros(sim_shape) for syn in self.syns}
-
+        
         # initialize membrane potentials, conductances, and refractory counters
         vs[0, :] = vs_init
         for syn in self.syns:
             gs[syn][0, :] = gs_init[syn]
         rp_ctrs = np.zeros(self.n)
-
+        
+        # initialize plasticity variables
+        if self.plasticity is not None:
+            
+            # rename variables to make them more accessible
+            masks = self.plasticity['masks']
+            w_ec_ca3_maxs = self.plasticity['w_ec_ca3_maxs']
+            t_w = self.plasticity['T_W']
+            t_c = self.plasticity['T_C']
+            c_s = self.plasticity['C_S']
+            beta_c = self.plasticity['BETA_C']
+            
+            # allocate space for plasticity variables
+            # NOTE: ws_plastic values are time-series of just the plastic weights
+            # in a 2D array where rows are time points and cols are weights
+            cs = np.zeros(sim_shape)
+            ws_plastic = {
+                syn: np.nan * np.zeros((len(ts), n_plastic))
+                for syn, n_plastic in self.ns_plastic.items()
+            }
+        
+            # set spike counter to 0 and plastic weights to initial weights
+            cs[0] = 0
+            for syn in self.syns:
+                ws_plastic[syn][0] = ws_up[syn][masks[syn]].copy()
+        else:
+            ws_plastic = None
+        
         # run simulation
+        ws_up = deepcopy(self.ws_up_init)
+        
         for step in range(1, len(ts)):
 
-            # loop over all synapse types and calculate new conductances
+            ## update dynamics
             for syn in self.syns:
-
-                w_up = self.ws_up[syn]
+                
+                # calculate new conductances for all synapse types
+                w_up = ws_up[syn]
                 w_rcr = self.ws_rcr[syn]
                 t_syn = self.ts_syn[syn]
 
@@ -146,11 +218,68 @@ class LIFNtwk(object):
             rp_ctrs -= dt
             # adjust negative refractory counters up to zero
             rp_ctrs[rp_ctrs < 0] = 0
+            
+            ## update plastic weights
+            if self.plasticity is not None:
+                
+                # calculate new spk-ctr and weight values
+                cs_prev = cs[step-1]
+                ws_prev = {syn: ws_plastic[syn][step-1] for syn in self.syns}
+                
+                cs_next, ws_next = update_spk_ctr_and_plastic_weights(
+                    spks=spks[step], cs_prev=cs_prev, ws_prev=ws_prev,
+                    t_c=t_c, c_s=c_s, beta_c=beta_c,
+                    t_w=t_w, w_ec_ca3_maxs=w_ec_ca3_maxs, dt=dt)
+                
+                # store calculated spk-ctr and weight values
+                cs[step] = cs_next
+                
+                for syn in self.syns:
+                    ws_plastic[syn][step] = ws_next[syn]
+                   
+                # insert updated weights into ws_up
+                for syn in self.syns:
+                    ws_up[syn][masks[syn]] = ws_plastic[syn][step]
 
         # return NtwkResponse object
         return NtwkResponse(
             vs=vs, spks=spks, v_rest=self.e_leak, v_th=self.v_th,
-            gs=gs, ws_rcr=self.ws_rcr, ws_up=self.ws_up)
+            gs=gs, ws_rcr=self.ws_rcr, ws_up=self.ws_up_init, ws_plastic=ws_plastic)
+
+
+def z(c, c_s, beta_c):
+    return 1 / (1 + np.exp(-(c - c_s)/beta_c))
+
+
+def update_spk_ctr_and_plastic_weights(
+        spks, cs_prev, ws_prev, t_c, c_s, beta_c, t_w, w_ec_ca3_maxs, dt):
+    """
+    Update spike-counter variable and plastic cxns from EC to CA3.
+    
+    :param spks: multi-unit spk vector from current time step
+    :param cs_prev: spk-ctrs for all cells at previous time step
+    :param ws_prev: syn-dict of plastic weights at previous timesteps
+    :param t_c: spk-ctr time constant (see parameters.ipynb)
+    :param c_s: spk-ctr threshold (see parameters.ipynb)
+    :param beta_c: spk-ctr nonlinearity slope (see parameters.ipynb)
+    :param t_w: weight change timescale (see parameters.ipynb)
+    :param w_ec_ca3_maxs: syn-dict of maximum EC->CA3 weight values
+    :param dt: numerical integration time step
+    """
+    # update spike counters
+    dc = -cs_prev * dt / t_c + spks.astype(float)
+    cs_next = cs_prev + dc
+
+    # update weights
+    ws_next = {}
+    
+    for syn in ws_prev.keys():
+        
+        w_max = w_ec_ca3_maxs[syn]
+        dw = z(cs_next, c_s, beta_c) * (w_max - ws_prev[syn]) * dt / t_w 
+        ws_next[syn] = ws_prev[syn] + dw
+
+    return cs_next, ws_next
 
 
 class NtwkResponse(object):
@@ -165,7 +294,7 @@ class NtwkResponse(object):
     :param positions: (2 x N) position array
     """
 
-    def __init__(self, vs, spks, v_rest, v_th, gs, ws_rcr, ws_up, place_field_centers=None):
+    def __init__(self, vs, spks, v_rest, v_th, gs, ws_rcr, ws_up, ws_plastic=None, place_field_centers=None):
         """Constructor."""
         self.vs = vs
         self.spks = spks
@@ -174,6 +303,7 @@ class NtwkResponse(object):
         self.gs = gs
         self.ws_rcr = ws_rcr
         self.ws_up = ws_up
+        self.ws_plastic = ws_plastic
         self.place_field_centers = place_field_centers
 
     def save(self, save_file, save_gs=False, save_ws=True, save_place_fields=True):
@@ -208,6 +338,7 @@ class NtwkResponse(object):
         if save_ws:
             data['ws_rcr'] = self.ws_rcr
             data['ws_up'] = self.ws_up
+            data['ws_plastic'] = self.ws_plastic
 
         if save_place_fields:
             data['place_field_centers'] = self.place_field_centers
