@@ -151,7 +151,7 @@ class LIFNtwk(object):
         if self.plasticity is not None:
             
             # rename variables to make them more accessible
-            masks = self.plasticity['masks']
+            masks_plastic = self.plasticity['masks']
             w_ec_ca3_maxs = self.plasticity['w_ec_ca3_maxs']
             t_w = self.plasticity['T_W']
             t_c = self.plasticity['T_C']
@@ -169,9 +169,10 @@ class LIFNtwk(object):
         
             # set spike counter to 0 and plastic weights to initial weights
             cs[0] = 0
-            for syn in self.syns:
-                ws_plastic[syn][0] = ws_up[syn][masks[syn]].copy()
+            for syn, mask in masks_plastic.items():
+                ws_plastic[syn][0] = self.ws_up_init[syn][mask].copy()
         else:
+            masks_plastic = None
             ws_plastic = None
         
         # run simulation
@@ -238,13 +239,14 @@ class LIFNtwk(object):
                     ws_plastic[syn][step] = ws_next[syn]
                    
                 # insert updated weights into ws_up
-                for syn in self.syns:
-                    ws_up[syn][masks[syn]] = ws_plastic[syn][step]
+                for syn, mask in masks_plastic.items():
+                    ws_up[syn][mask] = ws_plastic[syn][step]
 
         # return NtwkResponse object
         return NtwkResponse(
             vs=vs, spks=spks, v_rest=self.e_leak, v_th=self.v_th,
-            gs=gs, ws_rcr=self.ws_rcr, ws_up=self.ws_up_init, ws_plastic=ws_plastic)
+            gs=gs, ws_rcr=self.ws_rcr, ws_up=self.ws_up_init,
+            cs=cs, ws_plastic=ws_plastic, masks_plastic=masks_plastic)
 
 
 def z(c, c_s, beta_c):
@@ -294,7 +296,9 @@ class NtwkResponse(object):
     :param positions: (2 x N) position array
     """
 
-    def __init__(self, vs, spks, v_rest, v_th, gs, ws_rcr, ws_up, ws_plastic=None, place_field_centers=None):
+    def __init__(
+            self, vs, spks, v_rest, v_th, gs, ws_rcr, ws_up,
+            cs=None, ws_plastic=None, masks_plastic=None, place_field_centers=None):
         """Constructor."""
         self.vs = vs
         self.spks = spks
@@ -303,7 +307,9 @@ class NtwkResponse(object):
         self.gs = gs
         self.ws_rcr = ws_rcr
         self.ws_up = ws_up
+        self.cs = cs
         self.ws_plastic = ws_plastic
+        self.masks_plastic = masks_plastic
         self.place_field_centers = place_field_centers
 
     def save(self, save_file, save_gs=False, save_ws=True, save_place_fields=True):
@@ -339,6 +345,7 @@ class NtwkResponse(object):
             data['ws_rcr'] = self.ws_rcr
             data['ws_up'] = self.ws_up
             data['ws_plastic'] = self.ws_plastic
+            data['masks_plastic'] = self.masks_plastic
 
         if save_place_fields:
             data['place_field_centers'] = self.place_field_centers
