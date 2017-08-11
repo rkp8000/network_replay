@@ -224,21 +224,24 @@ class LIFNtwk(object):
             ## update plastic weights
             if self.plasticity is not None:
                 
-                # calculate new spk-ctr and weight values
-                cs_prev = cs[step-1]
-                ws_prev = {syn: ws_plastic[syn][step-1] for syn in self.syns}
-                
-                cs_next, ws_next = update_spk_ctr_and_plastic_weights(
-                    spks=spks[step], cs_prev=cs_prev, ws_prev=ws_prev,
-                    t_c=t_c, c_s=c_s, beta_c=beta_c,
-                    t_w=t_w, w_ec_ca3_maxs=w_ec_ca3_maxs, dt=dt)
-                
-                # store calculated spk-ctr and weight values
+                # calculate and store updated spk-ctr
+                cs_next = update_spk_ctr(spks=spks[step], cs_prev=cs[step-1], t_c=t_c, dt=dt)
                 cs[step] = cs_next
                 
+                # calculate new weight values for each syn type
                 for syn in self.syns:
-                    ws_plastic[syn][step] = ws_next[syn]
-                   
+                    ws_prev = ws_plastic[syn][step-1]
+                    w_ec_ca3_max = w_ec_ca3_maxs[syn]
+                    
+                    # reshape spk-ctr variable to align with updated weights
+                    cs_syn = cs_next[masks_plastic[syn].nonzero()[0]]
+                    ws_next = update_plastic_weights(
+                        cs=cs_syn, ws_prev=ws_prev, c_s=c_s, beta_c=beta_c,
+                        t_w=t_w, w_ec_ca3_max=w_ec_ca3_max, dt=dt)
+               
+                    # store updated weight values
+                    ws_plastic[syn][step] = ws_next
+
                 # insert updated weights into ws_up
                 for syn, mask in masks_plastic.items():
                     ws_up[syn][mask] = ws_plastic[syn][step]
@@ -254,35 +257,36 @@ def z(c, c_s, beta_c):
     return 1 / (1 + np.exp(-(c - c_s)/beta_c))
 
 
-def update_spk_ctr_and_plastic_weights(
-        spks, cs_prev, ws_prev, t_c, c_s, beta_c, t_w, w_ec_ca3_maxs, dt):
+def update_spk_ctr(spks, cs_prev, t_c, dt):
     """
-    Update spike-counter variable and plastic cxns from EC to CA3.
-    
+    Update the spk-ctr auxiliary variable.
     :param spks: multi-unit spk vector from current time step
     :param cs_prev: spk-ctrs for all cells at previous time step
-    :param ws_prev: syn-dict of plastic weights at previous timesteps
     :param t_c: spk-ctr time constant (see parameters.ipynb)
+    :param dt: numerical integration time step
+    """
+    dc = -cs_prev * dt / t_c + spks.astype(float)
+
+    return cs_prev + dc
+
+
+def update_plastic_weights(cs, ws_prev, c_s, beta_c, t_w, w_ec_ca3_max, dt):
+    """
+    Update the plastic cxns from EC to CA3.
+    
+    :param cs: spk-ctrs for all cells at current time step
+    :param ws_prev: 1-D array of plastic weight values at previous timestep
     :param c_s: spk-ctr threshold (see parameters.ipynb)
     :param beta_c: spk-ctr nonlinearity slope (see parameters.ipynb)
     :param t_w: weight change timescale (see parameters.ipynb)
-    :param w_ec_ca3_maxs: syn-dict of maximum EC->CA3 weight values
+    :param w_ec_ca3_max: syn-dict of maximum EC->CA3 weight values
     :param dt: numerical integration time step
     """
-    # update spike counters
-    dc = -cs_prev * dt / t_c + spks.astype(float)
-    cs_next = cs_prev + dc
-
-    # update weights
-    ws_next = {}
-    
-    for syn in ws_prev.keys():
+    if cs.shape != ws_prev.shape:
+        raise ValueError('Spk-ctr "cs" and plastic weights "ws_prev" must have same shape.')
         
-        w_max = w_ec_ca3_maxs[syn]
-        dw = z(cs_next, c_s, beta_c) * (w_max - ws_prev[syn]) * dt / t_w 
-        ws_next[syn] = ws_prev[syn] + dw
-
-    return cs_next, ws_next
+    dw = z(cs, c_s, beta_c) * (w_ec_ca3_max - ws_prev) * dt / t_w 
+    return ws_prev + dw
 
 
 class NtwkResponse(object):
