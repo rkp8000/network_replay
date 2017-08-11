@@ -174,6 +174,7 @@ class LIFNtwk(object):
         else:
             masks_plastic = None
             ws_plastic = None
+            cs = None
         
         # run simulation
         ws_up = deepcopy(self.ws_up_init)
