@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
+from aux import load, save
 from aux import load_time_file
 from plot import set_font_size
-import shelve
 
 
 def downsample_spks(spks, num):
@@ -75,7 +75,7 @@ def downsample_ma(xs, num):
 
 
 def ntwk_activity(
-        save_prefix, time_file, activity_file, fps=30, resting_size=50, spk_size=1000,
+        save_prefix, time_file, ntwk_file, fps=30, resting_size=50, spk_size=1000,
         default_color=(0, 0, 0), spking_color=(1, 0, 0), frames_per_spk=5,
         box=None, title='', x_label='', y_label='', show_timestamp=True,
         fig_size=(6.4, 4.8), font_size=16, verbose=False):
@@ -83,10 +83,10 @@ def ntwk_activity(
     Convert a time-series of membrane potentials and spks into viewable frames.
     
     :param save_prefix: prefix of frame files
-    :param time_file: shelved file containing the following fields:
+    :param time_file: file with dict containing the following fields:
         'timestamps': 1-D array containing timestamps corresponding to neural activity
         'fs': scalar sampling frequency
-    :param activity_file: shelved file containing the following fields:
+    :param ntwk_file: file with dict containing the following fields:
         'vs': 2-D array containing membrane potential values (in V) where rows are time points
             and cols are neurons
         'spks': 2-D logical array indicating spk times of individual neurons
@@ -106,7 +106,7 @@ def ntwk_activity(
     """
     
     if verbose:
-        print('Using timestamp file "{}" and activity file "{}".'.format(time_file, activity_file))
+        print('Using timestamp file "{}" and activity file "{}".'.format(time_file, ntwk_file))
         print('Frames will be saved with prefix "{}".'.format(save_prefix))
         print('Loading timestamps and network activity data...')
         
@@ -119,11 +119,11 @@ def ntwk_activity(
         raise ValueError(err_msg)
     
     # load activity data
-    data_a = shelve.open(activity_file)
+    data_a = load(ntwk_file)
     
     for key in ('vs', 'spks', 'v_rest', 'v_th'):
         if key not in data_a:
-            raise KeyError('Item with key "{}" not found in file "{}".'.format(key, activity_file))
+            raise KeyError('Item with key "{}" not found in file "{}".'.format(key, ntwk_file))
             
     vs = data_a['vs']
     spks = data_a['spks']
@@ -254,10 +254,10 @@ def traj(
     Convert a time-series of positions into a series of still frames.
     
     :param save_prefix: prefix of frame files
-    :param time_file: shelved file containing the following fields:
+    :param time_file: file with dict containing the following fields:
         'timestamps': 1-D array containing timestamps corresponding to neural activity
         'fs': scalar sampling frequency
-    :param traj_file: shelved file containing the following fields:
+    :param traj_file: file with dict containing the following fields:
         'xys': 2-D array containing (x, y) coordinates of each position over time; rows are
             time points, cols are x and y
         ['covs']: optional 3-D array containing uncertainty (covariance) matrix at each time
@@ -281,7 +281,7 @@ def traj(
     ts, fs = load_time_file(time_file)
 
     # load trajectory data
-    data_tr = shelve.open(traj_file)
+    data_tr = load(traj_file)
     
     # make sure traj file contains required keys
     if 'xys' not in data_tr:

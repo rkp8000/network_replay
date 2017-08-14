@@ -3,8 +3,8 @@ Code for trajectory-related simulation components.
 """
 import numpy as np
 import os
-import shelve
 
+from aux import load, save
 from aux import load_time_file
 
 
@@ -77,22 +77,8 @@ class RandomTraj(object):
 
         :param save_file: path to file to save
         """
-
-        # make sure save directory exists
-        save_dir = os.path.dirname(save_file)
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-            
-        # delete file if it already exists
-        if os.path.exists(save_file + '.db'):
-            os.remove(save_file + '.db')
-
-        # open file and save traj data
-        data = shelve.open(save_file)
-        data['xys'] = self.xys
-        data.close()
-
-        return save_file
+        data = {'xys': self.xys, 'vs': self.vs}
+        return save(save_file, data)
 
 
 def upstream_spks_from_traj(ts, xys, centers, stds, max_rates):
@@ -199,7 +185,6 @@ class InferredTraj(object):
             covs[mask] = cov
             
         return xys, covs
-        
     
     def __init__(self, ntwk_file, time_file, window):
         """Constructor."""
@@ -211,7 +196,7 @@ class InferredTraj(object):
         ts = load_time_file(time_file)[0]
         
         # extract place-field centers and spk counts
-        data = shelve.open(ntwk_file)
+        data = load(ntwk_file)
         
         if ('spks' not in data) or ('place_field_centers' not in data):
             raise KeyError(
@@ -222,8 +207,6 @@ class InferredTraj(object):
         xys, covs = self.infer_positions(
             ts, data['spks'], window, data['place_field_centers'])
         
-        data.close()
-        
         self.xys = xys
         self.covs = covs
         
@@ -233,19 +216,5 @@ class InferredTraj(object):
         
         :param save_file: path to save file
         """
-        
-        # make sure save directory exists
-        save_dir = os.path.dirname(save_file)
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-        
-        # delete file if it already exists
-        if os.path.exists(save_file + '.db'):
-            os.remove(save_file + '.db')
-            
-        data = shelve.open(save_file)
-        data['xys'] = self.xys
-        data['covs'] = self.covs
-        data.close()
-        
-        return save_file
+        data = {'xys': self.xys, 'covs': self.covs}
+        return save(save_file, data)

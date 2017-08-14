@@ -1,8 +1,9 @@
-from aux import load_time_file
 import numbers
-import shelve
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
+
+from aux import load, save
+from aux import load_time_file
 
 
 def set_font_size(ax, font_size, legend_font_size=None):
@@ -21,7 +22,7 @@ def set_font_size(ax, font_size, legend_font_size=None):
             text.set_fontsize(legend_font_size)
 
 
-def raster(ax, time_file, activity_file, order=None, colors='k'):
+def raster(ax, time_file, ntwk_file, order=None, colors='k'):
     """
     Make a raster plot of spiking activity from a ntwk simulation.
 
@@ -35,7 +36,7 @@ def raster(ax, time_file, activity_file, order=None, colors='k'):
     ts, fs = load_time_file(time_file)
 
     # load activity
-    data = shelve.open(activity_file)
+    data = load(ntwk_file)
 
     # check arguments
     if order is None:

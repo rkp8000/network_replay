@@ -1,7 +1,8 @@
 from copy import deepcopy
 import numpy as np
 import os
-import shelve
+
+from aux import save
 
 
 class LIFNtwk(object):
@@ -326,22 +327,12 @@ class NtwkResponse(object):
         :param save_ws: whether to save connectivity matrices
         :param save_positions: whether to save positions
         """
-
-        # make sure save directory exists
-        save_dir = os.path.dirname(save_file)
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-        # delete data file if it already exists
-        if os.path.exists(save_file + '.db'):
-            os.remove(save_file + '.db')
-            
-        # open file and save ntwk activity data
-        data = shelve.open(save_file)
-        data['vs'] = self.vs
-        data['spks'] = self.spks
-        data['v_rest'] = self.v_rest
-        data['v_th'] = self.v_th
+        data = {
+            'vs': self.vs,
+            'spks': self.spks,
+            'v_rest': self.v_rest,
+            'v_th': self.v_th,
+        }
 
         if save_gs:
             data['gs'] = self.gs
@@ -355,6 +346,4 @@ class NtwkResponse(object):
         if save_place_fields:
             data['place_field_centers'] = self.place_field_centers
 
-        data.close()
-
-        return save_file
+        return save(save_file, data)
