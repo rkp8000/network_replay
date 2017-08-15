@@ -75,7 +75,7 @@ def downsample_ma(xs, num):
 
 
 def ntwk_activity(
-        save_prefix, time_file, ntwk_file, fps=30, resting_size=50, spk_size=1000,
+        save_prefix, time_file, ntwk_file, fps=30, resting_size=50, spk_size=1000, amp=1,
         default_color=(0, 0, 0), spking_color=(1, 0, 0), frames_per_spk=5,
         box=None, title='', x_label='', y_label='', show_timestamp=True,
         fig_size=(6.4, 4.8), font_size=16, verbose=False):
@@ -97,6 +97,9 @@ def ntwk_activity(
     :param fps: frame rate
     :param resting_size: size of neurons at rest
     :param spk_size: size of neurons when they've reached spking threshold
+    :param amp: how much to polynomially amplify the visual difference between 
+        different membrane voltages (keep at 1 for linear relationship between
+        membrane voltage and circular area)
     :param default_color: neuron color
     :param spking_color: color of neuron when spking
     :param box: bounding box to display neurons in: (x_min, x_max, y_min, y_max)
@@ -178,8 +181,8 @@ def ntwk_activity(
     box = correct_box_dims(box)
 
     # convert membrane potentials to scatter sizes
-    slope = (spk_size - resting_size) / (v_th - v_rest)
-    sizes = slope * (vs - v_rest) + resting_size
+    slope = (spk_size - resting_size) / ((v_th - v_rest)**amp)
+    sizes = slope * ((vs - v_rest)**amp) + resting_size
     
     # make sure save directory exists
     save_dir = os.path.dirname(save_prefix)
