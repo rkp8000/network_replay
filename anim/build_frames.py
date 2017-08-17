@@ -76,7 +76,7 @@ def downsample_ma(xs, num):
 
 def ntwk_activity(
         save_prefix, time_file, ntwk_file, fps=30, resting_size=50, spk_size=1000, amp=1,
-        default_color=(0, 0, 0), spk_color=(1, 0, 0), frames_per_spk=5,
+        cxn_color=(0, 0, 0), default_color=(0, 0, 0), spk_color=(1, 0, 0), frames_per_spk=5,
         box=None, title='', x_label='', y_label='', show_timestamp=True,
         fig_size=(6.4, 4.8), font_size=16, verbose=False):
     """
@@ -100,6 +100,9 @@ def ntwk_activity(
     :param amp: how much to polynomially amplify the visual difference between 
         different membrane voltages (keep at 1 for linear relationship between
         membrane voltage and circular area)
+    :param cxn_color: color or dict of colors, e.g.,
+        cxn_color=(0, 0, 0),
+        cxn_color={('EX', 'EX'): (0, 0, 0), ('INH', 'EX'): (1, 0, 0)},
     :param default_color: neuron color
     :param spk_color: color of neuron when spking
     :param box: bounding box to display neurons in: (x_min, x_max, y_min, y_max)
@@ -148,6 +151,8 @@ def ntwk_activity(
         default_color = np.array([default_color[ct] for ct in cell_types])
     else:
         default_color = np.array([default_color] * vs.shape[1])
+    
+    ws_rcr = data_a['ws_rcr'] if 'ws_rcr' in data_a else None
     
     if verbose:
         print('Data loaded.')
@@ -201,7 +206,7 @@ def ntwk_activity(
     save_dir = os.path.dirname(save_prefix)
     if not os.path.exists(save_dir): os.makedirs(save_dir)
     
-    # set up figure and position neurons
+    # set up figure
     fig, ax = plt.subplots(1, 1, figsize=fig_size, tight_layout=True)
     
     ax.set_xlim(box[:2])
@@ -212,6 +217,16 @@ def ntwk_activity(
     
     set_font_size(ax, font_size)
     
+    # draw cxns if desired
+    if np.any([np.any(w) for w in ws_rcr.values()]):
+        
+        # make all cxns same color if cxn_color is just a tuple
+        if not isinstance(cxn_color, dict):
+            for w in ws_rcr.values():
+                line = w_to_line(w, positions)
+                ax.plot(line[0], line[1], color=cxn_color)
+    
+    # position neurons
     sca = ax.scatter(positions[0], positions[1], c=default_color, s=10, lw=0)
     
     # loop over frames
@@ -477,3 +492,30 @@ def ellipse_from_cov(xy, cov, scale, color):
     ell = Ellipse(xy, width=width, height=height, angle=angle, color=color)        
     
     return ell
+
+
+def w_to_line(w, xys):
+    """Convert a connection matrix and set of positions to a single plottable line.
+    
+    :param w: cxn matrix
+    :param xys: neuron positions
+    """
+    if not (w.shape[0] == w.shape[1]):
+        raise ValueError('Argument "w" must be a square array.')
+    if not (xys.shape == (2, w.shape[1])):
+        raise ValueError('Argument "xys" must be a (2 x N) array.')
+    
+    # get targ and src cell idxs for all nonzero weights
+    idxs_targ, idxs_src = w.nonzero()
+    
+    # get positions corresponding to targs and src
+    xs_targ, ys_targ = xys[:, idxs_targ]
+    xs_src, ys_src = xys[:, idxs_src]
+    
+    # convert positions into pairs of coords separated by nans
+    nans = np.nan * np.zeros(xs_targ.shape)
+    
+    xs_line = np.array([xs_src, xs_targ, nans]).T.flatten()
+    ys_line = np.array([ys_src, ys_targ, nans]).T.flatten()
+    
+    return np.array([xs_line, ys_line])
