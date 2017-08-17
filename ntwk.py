@@ -13,10 +13,10 @@ class LIFNtwk(object):
 
     In all weight matrices, rows index target, cols index source.
     
-    :param t_m: membrane time constant
-    :param e_leak: leak reversal potential
-    :param v_th: firing threshold potential
-    :param v_reset: reset potential
+    :param t_m: membrane time constant (or 1D array)
+    :param e_leak: leak reversal potential (or 1D array)
+    :param v_th: firing threshold potential (or 1D array)
+    :param v_reset: reset potential (or 1D array)
     :param t_r: refractory time
     :param es_rev: synaptic reversal potentials (dict with keys naming
         synapse types, e.g., 'AMPA', 'NMDA', ...)
@@ -92,7 +92,11 @@ class LIFNtwk(object):
                 raise KeyError(
                     'Argument "plasticity[\'w_ec_ca3_maxs\']" must contain same '
                     'keys (synapse types) as argument "ws_up".')
-                    
+        
+        # make sure v_reset is actually an array
+        if isinstance(v_reset, (int, float, complex)):
+            v_reset = v_reset * np.ones(self.n)
+            
         # store network params
         self.t_m = t_m
         self.e_leak = e_leak
@@ -208,12 +212,12 @@ class LIFNtwk(object):
             vs[step] = vs[step-1] + dvs
 
             # force refractory neurons to reset potential
-            vs[step][rp_ctrs > 0] = self.v_reset
+            vs[step][rp_ctrs > 0] = self.v_reset[rp_ctrs > 0]
 
             # identify spks
             spks[step] = vs[step] >= self.v_th
             # reset membrane potentials of spiking neurons
-            vs[step][spks[step]] = self.v_reset
+            vs[step][spks[step]] = self.v_reset[spks[step]]
 
             # set refractory counters for spiking neurons
             rp_ctrs[spks[step]] = self.t_r
