@@ -312,10 +312,6 @@ class NtwkResponse(object):
             cs=None, ws_plastic=None, masks_plastic=None, place_field_centers=None):
         """Constructor."""
         # check args
-        if not (vs.shape[1] == spks.shape[1] == ws_rcr.shape[0] == ws_rcr.shape[1]
-                == ws_up.shape[0]):
-            raise ValueError(
-                'All variables must specify same number of neurons.')
         if (cell_types is not None) and (len(cell_types) != vs.shape[1]):
             raise ValueError(
                 'If "cell_types" is provided, all cells must have a type.')
