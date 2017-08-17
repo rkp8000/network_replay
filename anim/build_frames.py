@@ -76,7 +76,8 @@ def downsample_ma(xs, num):
 
 def ntwk_activity(
         save_prefix, time_file, ntwk_file, fps=30, resting_size=50, spk_size=1000, amp=1,
-        cxn_color=(0, 0, 0), default_color=(0, 0, 0), spk_color=(1, 0, 0), frames_per_spk=5,
+        cxn_color=(0, 0, 0), cxn_lw=1,
+        default_color=(0, 0, 0), spk_color=(1, 0, 0), frames_per_spk=5,
         box=None, title='', x_label='', y_label='', show_timestamp=True,
         fig_size=(6.4, 4.8), font_size=16, verbose=False):
     """
@@ -137,6 +138,9 @@ def ntwk_activity(
     v_th = data_a['v_th']
     cell_types = data_a['cell_types']
     
+    # let n be number of nrns
+    n = vs.shape[1]
+    
     # make sure timestamp vector is same length as activity vectors
     assert len(ts) == len(vs) == len(spks)
     
@@ -152,7 +156,17 @@ def ntwk_activity(
     else:
         default_color = np.array([default_color] * vs.shape[1])
     
+    # get recurrent cxns
     ws_rcr = data_a['ws_rcr'] if 'ws_rcr' in data_a else None
+    
+    # check cxn visualization args
+    if isinstance(cxn_color, dict) and not isinstance(cxn_lw, dict):
+        cxn_lw = {k: cxn_lw for k in cxn_color}
+    if isinstance(cxn_lw, dict) and not isinstance(cxn_color, dict):
+        cxn_color = {k: cxn_color for k in cxn_lw}
+    if isinstance(cxn_color, dict):
+        if not np.all([isinstance(key, tuple) and len(key) == 2 for key in cxn_color]):
+            raise TypeError('All keys in "cxn_color" must be tuples specifying (targ, src).')
     
     if verbose:
         print('Data loaded.')
@@ -222,9 +236,36 @@ def ntwk_activity(
         
         # make all cxns same color if cxn_color is just a tuple
         if not isinstance(cxn_color, dict):
+            
             for w in ws_rcr.values():
+                
                 line = w_to_line(w, positions)
-                ax.plot(line[0], line[1], color=cxn_color)
+                ax.plot(line[0], line[1], color=cxn_color, lw=cxn_lw, zorder=-1)
+                
+        else:
+            
+            # color cxns according to their src and targ cell types
+            for targ, src in cxn_color:
+                
+                # get cxn mask
+                targ_mask = np.array(cell_types) == targ
+                src_mask = np.array(cell_types) == src
+                targ_src_mask = np.outer(targ_mask, src_mask)
+                
+                # draw cxns
+                lw = cxn_lw[(targ, src)]
+                color = cxn_color[(targ, src)]
+                
+                for w in ws_rcr.values():
+                    
+                    # make new w with unmasked cxns set to zero
+                    w_ = w.copy()
+                    w_[~targ_src_mask] = 0
+                    
+                    # draw cxns
+                    line = w_to_line(w_, positions)
+                    ax.plot(line[0], line[1], color=color, lw=lw, zorder=-1)
+                    
     
     # position neurons
     sca = ax.scatter(positions[0], positions[1], c=default_color, s=10, lw=0)
