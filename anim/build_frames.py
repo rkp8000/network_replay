@@ -78,7 +78,8 @@ def ntwk_activity(
         save_prefix, time_file, ntwk_file, fps=30, resting_size=50, spk_size=1000, amp=1,
         cxn_color=(0, 0, 0), cxn_lw=1,
         default_color=(0, 0, 0), spk_color=(1, 0, 0), frames_per_spk=5,
-        box=None, title='', x_label='', y_label='', show_timestamp=True,
+        box=None, title='', x_label='', y_label='', x_ticks=None, y_ticks=None,
+        x_tick_labels=None, y_tick_labels=None, show_timestamp=True,
         fig_size=(6.4, 4.8), font_size=16, verbose=False):
     """
     Convert a time-series of membrane potentials and spks into viewable frames.
@@ -229,6 +230,15 @@ def ntwk_activity(
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
     
+    if x_ticks is not None:
+        ax.set_xticks(x_ticks)
+    if y_ticks is not None:
+        ax.set_yticks(y_ticks)
+    if x_tick_labels is not None:
+        ax.set_xticklabels(x_tick_labels)
+    if y_tick_labels is not None:
+        ax.set_yticklabels(y_tick_labels)
+        
     set_font_size(ax, font_size)
     
     # draw cxns if desired
