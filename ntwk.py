@@ -296,16 +296,30 @@ class NtwkResponse(object):
 
     :param vs: membrane potentials
     :param spks: spk times
-    :param gs: conductances
-    :param ws_rcr: recurrent weight matrices
-    :param ws_up: upstream weight matrices
-    :param positions: (2 x N) position array
+    :param gs: syn-dict of conductances
+    :param ws_rcr: syn-dict of recurrent weight matrices
+    :param ws_up: syn-dict upstream weight matrices
+    :param cell_types: array-like of cell-types
+    :param cs: spk ctr variables for each cell
+    :param ws_plastic: syn-dict of time-courses of plastic weights
+    :param masks_plastic: syn-dict of masks specifying which weights the plastic
+        ones correspond to
+    :param place_field_centers: array of cell place field centers
     """
 
     def __init__(
-            self, vs, spks, v_rest, v_th, gs, ws_rcr, ws_up,
+            self, vs, spks, v_rest, v_th, gs, ws_rcr, ws_up, cell_types=None,
             cs=None, ws_plastic=None, masks_plastic=None, place_field_centers=None):
         """Constructor."""
+        # check args
+        if not (vs.shape[1] == spks.shape[1] == ws_rcr.shape[0] == ws_rcr.shape[1]
+                == ws_up.shape[0]):
+            raise ValueError(
+                'All variables must specify same number of neurons.')
+        if (cell_types is not None) and (len(cell_types) != vs.shape[1]):
+            raise ValueError(
+                'If "cell_types" is provided, all cells must have a type.')
+            
         self.vs = vs
         self.spks = spks
         self.v_rest = v_rest
@@ -313,6 +327,7 @@ class NtwkResponse(object):
         self.gs = gs
         self.ws_rcr = ws_rcr
         self.ws_up = ws_up
+        self.cell_types = cell_types
         self.cs = cs
         self.ws_plastic = ws_plastic
         self.masks_plastic = masks_plastic
@@ -332,6 +347,7 @@ class NtwkResponse(object):
             'spks': self.spks,
             'v_rest': self.v_rest,
             'v_th': self.v_th,
+            'cell_types': self.cell_types,
         }
 
         if save_gs:

@@ -76,7 +76,7 @@ def downsample_ma(xs, num):
 
 def ntwk_activity(
         save_prefix, time_file, ntwk_file, fps=30, resting_size=50, spk_size=1000, amp=1,
-        default_color=(0, 0, 0), spking_color=(1, 0, 0), frames_per_spk=5,
+        default_color=(0, 0, 0), spk_color=(1, 0, 0), frames_per_spk=5,
         box=None, title='', x_label='', y_label='', show_timestamp=True,
         fig_size=(6.4, 4.8), font_size=16, verbose=False):
     """
@@ -101,7 +101,7 @@ def ntwk_activity(
         different membrane voltages (keep at 1 for linear relationship between
         membrane voltage and circular area)
     :param default_color: neuron color
-    :param spking_color: color of neuron when spking
+    :param spk_color: color of neuron when spking
     :param box: bounding box to display neurons in: (x_min, x_max, y_min, y_max)
     :param show_timestamp: whether or not to show timestamp in figure title
     :param fig_size: size of figure to make
@@ -132,9 +132,22 @@ def ntwk_activity(
     spks = data_a['spks']
     v_rest = data_a['v_rest']
     v_th = data_a['v_th']
+    cell_types = data_a['cell_types']
     
     # make sure timestamp vector is same length as activity vectors
     assert len(ts) == len(vs) == len(spks)
+    
+    # convert default_color into array of colors for each cell
+    if cell_types is not None and isinstance(default_color, dict):
+        # make sure cell types align with specified color cell types
+        try:
+            assert np.all([ct in default_color for ct in np.unique(cell_types)])
+        except:
+            raise KeyError('All cell types must have a default color.')
+            
+        default_color = np.array([default_color[ct] for ct in cell_types])
+    else:
+        default_color = np.array([default_color] * vs.shape[1])
     
     if verbose:
         print('Data loaded.')
@@ -217,7 +230,7 @@ def ntwk_activity(
         if not any(spk_offset_ctr):
             sca.set_color(default_color)
         else:
-            colors = [spking_color if s else default_color for s in spk_offset_ctr]
+            colors = [spk_color if s else dc for s, dc in zip(spk_offset_ctr, default_color)]
             sca.set_color(colors)
             
         # set sizes of non-spking neurons
