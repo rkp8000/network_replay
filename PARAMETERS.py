@@ -40,6 +40,8 @@ W_N_PL_CA3 = 0
 
 W_G_INH_PC = 0.024
 
+W_A_PC_INH = 0.013
+
 # MEMBRANE POTENTIAL DYNAMICS
 
 V_REST = -0.068  # (V)
@@ -47,6 +49,11 @@ V_TH = -0.036  # (V)
 V_RESET = -0.068  # (V)
 T_M = 0.05  # (s)
 T_R = 0.002  # (s)
+
+V_REST_INH = -0.058  # (V)
+V_TH_INH = -0.036  # (V)
+V_RESET_INH = -0.058  # (V)
+T_M_INH = 0.009  # (s)
 
 # SYNAPTIC CONDUCTANCE DYNAMICS
 
@@ -58,6 +65,8 @@ E_GABA = -0.08  # (V)
 T_AMPA = 0.002  # (s)
 T_NMDA = 0.08  # (s)
 T_GABA = 0.005  # (s)
+
+E_LEAK_INH = -0.058  # (V)
 
 # EC-CA3 PLASTICITY
 T_W = 1  # (s)
