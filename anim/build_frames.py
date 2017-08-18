@@ -76,7 +76,7 @@ def downsample_ma(xs, num):
 
 def ntwk_activity(
         save_prefix, time_file, ntwk_file, fps=30, resting_size=50, spk_size=1000, amp=1,
-        cxn_color=(0, 0, 0), cxn_lw=1,
+        positions=None, cxn_color=(0, 0, 0), cxn_lw=1, cxn_zorder=-1,
         default_color=(0, 0, 0), spk_color=(1, 0, 0), frames_per_spk=5,
         box=None, title='', x_label='', y_label='', x_ticks=None, y_ticks=None,
         x_tick_labels=None, y_tick_labels=None, show_timestamp=True,
@@ -92,7 +92,6 @@ def ntwk_activity(
         'vs': 2-D array containing membrane potential values (in V) where rows are time points
             and cols are neurons
         'spks': 2-D logical array indicating spk times of individual neurons
-        'positions': 2-D array containing (x, y) positions of neurons (cols are neurons)
         'w': square matrix indicating recurrent connection weights among neurons
         'v_rest': resting membrane potential (in V)
         'v_th': threshold membrane potential (in V)
@@ -139,12 +138,34 @@ def ntwk_activity(
     v_th = data_a['v_th']
     cell_types = data_a['cell_types']
     
+    # downsample data if necessary
+    if fps < fs:
+        if verbose:
+            print('Downsampling data from {} Hz to {} fps...'.format(fs, fps))
+        
+        n_down = int(round((ts[-1] - ts[0]) * fps))
+        ts = downsample_ma(ts, n_down)
+        
+        # membrane potential and spks
+        vs = downsample_ma(vs, n_down)
+        spks = downsample_spks(spks, n_down)
+    
+        if verbose:
+            print('Data downsampled.')
+    
     # let n be number of nrns
     n = vs.shape[1]
     
     # make sure timestamp vector is same length as activity vectors
     assert len(ts) == len(vs) == len(spks)
     
+    # generate random positions if not provided
+    if positions is None:
+        positions = np.random.normal(0, 1, (2, n))
+        
+    if positions.shape != (2, n):
+        raise ValueError('Arg "positions" must be a (2 x N) array.')
+     
     # convert default_color into array of colors for each cell
     if cell_types is not None and isinstance(default_color, dict):
         # make sure cell types align with specified color cell types
@@ -163,6 +184,8 @@ def ntwk_activity(
     # check cxn visualization args
     if isinstance(cxn_color, dict) and not isinstance(cxn_lw, dict):
         cxn_lw = {k: cxn_lw for k in cxn_color}
+    if isinstance(cxn_color, dict) and not isinstance(cxn_zorder, dict):
+        cxn_zorder = {k: cxn_zorder for k in cxn_color}
     if isinstance(cxn_lw, dict) and not isinstance(cxn_color, dict):
         cxn_color = {k: cxn_color for k in cxn_lw}
     if isinstance(cxn_color, dict):
@@ -171,28 +194,7 @@ def ntwk_activity(
     
     if verbose:
         print('Data loaded.')
-        
-    # downsample data if necessary
-    if fps < fs:
-        if verbose:
-            print('Downsampling data from {} Hz to {} fps...'.format(fs, fps))
-        
-        n_down = int(round((ts[-1] - ts[0]) * fps))
-        ts = downsample_ma(ts, n_down)
-        
-        # membrane potential and spks
-        vs = downsample_ma(vs, n_down)
-        spks = downsample_spks(spks, n_down)
     
-        if verbose:
-            print('Data downsampled.')
-    
-    # extract positions from data or generate random ones
-    if 'place_field_centers' in data_a:
-        positions = data_a['place_field_centers']
-    else:
-        positions = np.random.normal(0, 1, (2, vs.shape[1]))
-        
     # automatically compute box size if not provided
     if box is None:
         x_min = positions[0].min()
@@ -212,7 +214,7 @@ def ntwk_activity(
     
     # automatically adjust box if either dimension is zero
     box = correct_box_dims(box)
-
+    
     # convert membrane potentials to scatter sizes
     slope = (spk_size - resting_size) / ((v_th - v_rest)**amp)
     sizes = slope * ((vs - v_rest)**amp) + resting_size
@@ -274,9 +276,8 @@ def ntwk_activity(
                     
                     # draw cxns
                     line = w_to_line(w_, positions)
-                    ax.plot(line[0], line[1], color=color, lw=lw, zorder=-1)
+                    ax.plot(line[0], line[1], color=color, lw=lw, zorder=cxn_zorder[(targ, src)])
                     
-    
     # position neurons
     sca = ax.scatter(positions[0], positions[1], c=default_color, s=10, lw=0)
     
