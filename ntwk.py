@@ -5,6 +5,48 @@ import os
 from aux import save
 
 
+# CONNECTIVITY FUNCTIONS
+
+def cxns_pcs_rcr(pfs, z_pc, l_pc):
+    """
+    Generate a recurrent connectivity matrix with preferential
+    attachment between pyramidal cells with nearby place fields.
+    
+    :param pfs: (2 x N) array of place fields (cells without place fields
+        should have nans in their place)
+    :param z_pc: normalization factor for connections
+    :param l_pc: length scale of preferential attachment (m)
+    :return: N x N boolean cxn matrix
+    """
+    # check args
+    if len(pfs) != 2:
+        raise ValueError('Arg "pfs" must have two rows.')
+    if l_pc <= 0:
+        raise ValueError('Arg "l_pc" must be > 0.')
+    
+    # get number of cells
+    n = pfs.shape[1]
+    
+    # build distance matrix
+    dx = np.tile(pfs[0][None, :], (n, 1)) - np.tile(pfs[0][:, None], (1, n))
+    dy = np.tile(pfs[1][None, :], (n, 1)) - np.tile(pfs[1][:, None], (1, n))
+    d = np.sqrt(dx**2 + dy**2)
+    
+    # build cxn probability matrix
+    p = z_pc*np.exp(-d/l_pc)
+    
+    # set nans and diagonal to zero
+    p[np.eye(n, dtype=bool)] = 0
+    p[np.isnan(p)] = 0
+    
+    # build cxn matrix
+    cxns = np.random.rand(n, n) < p
+    
+    return cxns
+
+
+# NETWORK CLASSES AND FUNCTIONS
+
 class LIFNtwk(object):
     """
     Network of leaky integrate-and-fire (LIF) neurons. All parameters should be given in SI units
