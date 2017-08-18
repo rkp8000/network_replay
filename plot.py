@@ -60,5 +60,8 @@ def raster(ax, time_file, ntwk_file, order=None, colors='k'):
 
     ax.scatter(spk_times, spk_rows, c=cs, lw=1, marker='|')
 
+    ax.set_xlim(ts[0], ts[-1])
+    ax.set_ylim(spks.shape[1], -1)
+    
     ax.set_xlabel('t (s)')
     ax.set_ylabel('neuron')
