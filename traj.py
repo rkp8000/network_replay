@@ -8,7 +8,31 @@ from aux import load, save
 from aux import load_time_file
 
 
-class RandomTraj(object):
+class Traj(object):
+    
+    def __init__(self, ts, xys):
+        
+        if xys.shape != (len(ts), 2):
+            raise ValueError('Arg "xys" must be len(ts) x 2 array.')
+            
+        self.xys = xys
+        self.vs = (np.gradient(xys, axis=0).T/np.gradient(ts)).T
+        
+    def save(self, save_file):
+        """
+        Save traj to a file.
+
+        :param save_file: path to file to save
+        """
+        data = {'xys': self.xys, 'vs': self.vs}
+        
+        if hasattr(self, 'covs'):
+            data['covs'] = covs
+            
+        return save(save_file, data)
+
+        
+class RandomTraj(Traj):
 
     """
     Random trajectory through space.
@@ -71,15 +95,6 @@ class RandomTraj(object):
         self.xys = xys
         self.vs = vs
 
-    def save(self, save_file):
-        """
-        Save traj to a file.
-
-        :param save_file: path to file to save
-        """
-        data = {'xys': self.xys, 'vs': self.vs}
-        return save(save_file, data)
-
 
 def upstream_spks_from_traj(ts, xys, centers, stds, max_rates):
     """
@@ -127,7 +142,7 @@ def upstream_spks_from_traj(ts, xys, centers, stds, max_rates):
     return spks
 
 
-class InferredTraj(object):
+class InferredTraj(Traj):
     """
     Trajectory inferred from network activity.
     
@@ -204,17 +219,14 @@ class InferredTraj(object):
                 'and place field centers.'
             )
         
+        # get mask of cells that have place fields
+        pf_mask = np.all(~np.isnan(data['place_field_centers']), axis=0)
+        
+        # infer positions
         xys, covs = self.infer_positions(
-            ts, data['spks'], window, data['place_field_centers'])
+            ts, data['spks'][:, pf_mask], window,
+            data['place_field_centers'][:, pf_mask])
         
         self.xys = xys
+        self.vs = None
         self.covs = covs
-        
-    def save(self, save_file):
-        """
-        Save inferred position sequence to file.
-        
-        :param save_file: path to save file
-        """
-        data = {'xys': self.xys, 'covs': self.covs}
-        return save(save_file, data)
