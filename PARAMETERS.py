@@ -27,7 +27,7 @@ P_N_PC_PC = 0.01
 P_A_PC_EC = 0.01
 P_N_PC_EC = 0.01
 
-W_A_PC_PC = 0
+W_A_PC_PC = 0.0085
 W_N_PC_PC = 0
 
 W_A_PC_EC = 0
