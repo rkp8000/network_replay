@@ -3,6 +3,7 @@ from matplotlib.patches import Ellipse
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import time
 
 from aux import load, save
 from aux import load_time_file
@@ -80,7 +81,7 @@ def ntwk_activity(
         default_color=(0, 0, 0), spk_color=(1, 0, 0), frames_per_spk=5,
         box=None, title='', x_label='', y_label='', x_ticks=None, y_ticks=None,
         x_tick_labels=None, y_tick_labels=None, show_timestamp=True,
-        fig_size=(6.4, 4.8), font_size=16, verbose=False):
+        fig_size=(6.4, 4.8), font_size=16, verbose=False, report_every=30):
     """
     Convert a time-series of membrane potentials and spks into viewable frames.
     
@@ -110,6 +111,7 @@ def ntwk_activity(
     :param show_timestamp: whether or not to show timestamp in figure title
     :param fig_size: size of figure to make
     :param verbose: whether or not to print progress details
+    :param report_every: approximately how often to report progress (s)
     """
     
     if verbose:
@@ -244,7 +246,7 @@ def ntwk_activity(
     set_font_size(ax, font_size)
     
     # draw cxns if desired
-    if np.any([np.any(w) for w in ws_rcr.values()]):
+    if np.sum(np.abs([np.sum(np.abs(w)) for w in ws_rcr.values()])):
         
         # make all cxns same color if cxn_color is just a tuple
         if not isinstance(cxn_color, dict):
@@ -288,6 +290,9 @@ def ntwk_activity(
     save_files = []
     spk_offset_ctr = np.zeros(spks.shape[1], dtype=int)
     
+    loop_start_time = time.time()
+    last_update = time.time()
+    
     for f_ctr, (t, sizes_, spks_) in enumerate(zip(ts, sizes, spks)):
         
         # set colors according to spking
@@ -319,10 +324,18 @@ def ntwk_activity(
         
         fig.savefig(save_file)
         
+        if time.time() > last_update + report_every:
+            
+            if verbose:
+                print('{0} frames completed after {1:.3f} s...'.format(
+                    f_ctr + 1, time.time() - loop_start_time))
+                
+            last_update = time.time()
+        
     plt.close()
     
     if verbose:
-        print('Frames saved.')
+        print('All frames written to disk.')
         
     return save_files
 
