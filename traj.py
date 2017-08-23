@@ -27,7 +27,7 @@ class Traj(object):
         data = {'xys': self.xys, 'vs': self.vs}
         
         if hasattr(self, 'covs'):
-            data['covs'] = covs
+            data['covs'] = self.covs
             
         return save(save_file, data)
 
