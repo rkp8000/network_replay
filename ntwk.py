@@ -1,5 +1,6 @@
 from copy import deepcopy
 import numpy as np
+from scipy.sparse import csc_matrix
 import os
 
 from aux import save
@@ -78,7 +79,7 @@ class LIFNtwk(object):
     
     def __init__(self,
             t_m, e_leak, v_th, v_reset, t_r,
-            es_rev, ts_syn, ws_rcr, ws_up, plasticity=None):
+            es_rev, ts_syn, ws_rcr, ws_up, plasticity=None, sparse=True):
         """Constructor."""
 
         # validate arguments
@@ -147,11 +148,16 @@ class LIFNtwk(object):
         self.t_r = t_r
         self.es_rev = es_rev
         self.ts_syn = ts_syn
-        self.ws_rcr = ws_rcr
-        self.ws_up_init = ws_up
         self.plasticity = plasticity
         if plasticity is not None:
             self.ns_plastic = {syn: w.sum() for syn, w in plasticity['masks'].items()}
+         
+        if sparse:
+            ws_rcr = {syn: csc_matrix(w) for syn, w in ws_rcr.items()}
+            ws_up = {syn: csc_matrix(w) for syn, w in ws_up.items()}
+            
+        self.ws_rcr = ws_rcr
+        self.ws_up_init = ws_up
 
     def run(self, spks_up, vs_init, gs_init, dt):
         """
