@@ -61,7 +61,7 @@ class LIFNtwk(object):
     :param v_th: firing threshold potential (or 1D array)
     :param v_reset: reset potential (or 1D array)
     :param t_r: refractory time
-    :param es_rev: synaptic reversal potentials (dict with keys naming
+    :param es_syn: synaptic reversal potentials (dict with keys naming
         synapse types, e.g., 'AMPA', 'NMDA', ...)
     :param ts_syn: synaptic time constants (dict)
     :param ws_rcr: recurrent synaptic weight matrices (dict with keys
@@ -79,19 +79,19 @@ class LIFNtwk(object):
     
     def __init__(self,
             t_m, e_leak, v_th, v_reset, t_r,
-            es_rev, ts_syn, ws_rcr, ws_up, plasticity=None, sparse=True):
+            es_syn, ts_syn, ws_rcr, ws_up, plasticity=None, sparse=True):
         """Constructor."""
 
         # validate arguments
 
         # check syn. dicts have same keys
-        if not set(es_rev) == set(ts_syn) == set(ws_rcr) == set(ws_up):
+        if not set(es_syn) == set(ts_syn) == set(ws_rcr) == set(ws_up):
             raise ValueError(
-                'All synaptic dicts ("es_rev", "ts_syn", '
+                'All synaptic dicts ("es_syn", "ts_syn", '
                 '"ws_rcr", "ws_inp") must have same keys.'
             )
 
-        self.syns = es_rev.keys()
+        self.syns = es_syn.keys()
 
         # check weight matrices have correct dims
         self.n = list(ws_rcr.values())[0].shape[1]
@@ -146,7 +146,7 @@ class LIFNtwk(object):
         self.v_th = v_th
         self.v_reset = v_reset
         self.t_r = t_r
-        self.es_rev = es_rev
+        self.es_syn = es_syn
         self.ts_syn = ts_syn
         self.plasticity = plasticity
         if plasticity is not None:
@@ -253,7 +253,7 @@ class LIFNtwk(object):
                 gs[syn][step] = gs[syn][step-1] + dgs
 
             # calculate current input resulting from conductances
-            is_g = [gs[syn][step]*(self.es_rev[syn]-vs[step-1]) for syn in self.syns]
+            is_g = [gs[syn][step]*(self.es_syn[syn]-vs[step-1]) for syn in self.syns]
 
             # update membrane potential
             dvs = -(dt/self.t_m) * (vs[step-1] - self.e_leak) + np.sum(is_g, axis=0)
