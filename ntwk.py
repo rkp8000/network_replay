@@ -60,6 +60,9 @@ class LIFNtwk(object):
     :param e_leak: leak reversal potential (or 1D array)
     :param v_th: firing threshold potential (or 1D array)
     :param v_reset: reset potential (or 1D array)
+    :param e_ahp: afterhyperpolarization (potassium) reversal potential
+    :param t_ahp: afterhyperpolarization time constant
+    :param w_ahp: afterhyperpolarization magnitude 
     :param t_r: refractory time
     :param es_syn: synaptic reversal potentials (dict with keys naming
         synapse types, e.g., 'AMPA', 'NMDA', ...)
@@ -75,14 +78,26 @@ class LIFNtwk(object):
         'T_C': timescale of CA3 spike-counter auxiliary variable
         'C_S': threshold for spike-count-based plasticity activation
         'BETA_C': slope of spike-count nonlinearity
+    :param sparse: whether to convert weight matrices to sparse matrices for
+        more efficient processing
     """
     
     def __init__(self,
             t_m, e_leak, v_th, v_reset, t_r,
-            es_syn, ts_syn, ws_rcr, ws_up, plasticity=None, sparse=True):
+            e_ahp=0, t_ahp=np.inf, w_ahp=0,
+            es_syn=None, ts_syn=None, ws_up=None, ws_rcr=None, 
+            plasticity=None, sparse=True):
         """Constructor."""
 
         # validate arguments
+        if es_syn is None:
+            es_syn = {}
+        if ts_syn is None:
+            ts_syn = {}
+        if ws_up is None:
+            ws_up = {}
+        if ws_rcr is None:
+            ws_rcr = {}
 
         # check syn. dicts have same keys
         if not set(es_syn) == set(ts_syn) == set(ws_rcr) == set(ws_up):
@@ -146,8 +161,13 @@ class LIFNtwk(object):
         self.v_th = v_th
         self.v_reset = v_reset
         self.t_r = t_r
+        self.e_ahp = e_ahp
+        self.t_ahp = t_ahp
+        self.w_ahp = w_ahp
+        
         self.es_syn = es_syn
         self.ts_syn = ts_syn
+        
         self.plasticity = plasticity
         if plasticity is not None:
             self.ns_plastic = {syn: w.sum() for syn, w in plasticity['masks'].items()}
@@ -159,20 +179,26 @@ class LIFNtwk(object):
         self.ws_rcr = ws_rcr
         self.ws_up_init = ws_up
 
-    def run(self, spks_up, vs_init, gs_init, dt):
+    def run(self, spks_up, dt, vs_init, gs_init=None, g_ahp_init=None):
         """
         Run a simulation of the network.
 
         :param spks_up: upstream spiking inputs (rows are time points, cols are neurons)
             (should be non-negative integers)
+        :param dt: integration time step for dynamics simulation
         :param vs_init: initial vs
         :param gs_init: initial gs (dict of 1-D arrays)
-        :param dt: integration time step for dynamics simulation
+        :param g_ahp_init: initial g_ahp (1-D array)
 
         :return: network response object
         """
 
         # validate arguments
+        if gs_init is None:
+            gs_init = {syn: np.zeros(self.n) for syn in self.syns}
+        if g_ahp_init is None:
+            g_ahp_init = np.zeros(self.n)
+        
         if type(spks_up) != np.ndarray or spks_up.ndim != 2:
             raise TypeError('"inps_upstream" must be a 2D array.')
 
@@ -184,7 +210,10 @@ class LIFNtwk(object):
 
         if not all([gs.shape == (self.n,) for gs in gs_init.values()]):
             raise ValueError(
-                'All elements of "gs_init" should be 1-D with one element per neuron.')
+                'All elements of "gs_init" should be 1-D array with one element per neuron.')
+        if not g_ahp_init.shape == (self.n,):
+            raise ValueError(
+                '"g_ahp_init" should be 1-D array with one element per neuron.')
 
         ts = np.arange(len(spks_up)) * dt
 
@@ -193,11 +222,15 @@ class LIFNtwk(object):
         vs = np.nan * np.zeros(sim_shape)
         spks = np.zeros(sim_shape, dtype=bool)
         gs = {syn: np.nan * np.zeros(sim_shape) for syn in self.syns}
+        g_ahp = np.nan * np.zeros(sim_shape)
         
         # initialize membrane potentials, conductances, and refractory counters
         vs[0, :] = vs_init
+        
         for syn in self.syns:
             gs[syn][0, :] = gs_init[syn]
+        g_ahp[0, :] = g_ahp_init
+        
         rp_ctrs = np.zeros(self.n)
         
         # initialize plasticity variables
@@ -247,13 +280,22 @@ class LIFNtwk(object):
                 inps_rcr = w_rcr.dot(spks[step-1].astype(float))
 
                 # decay conductances and add any positive inputs
-                dgs = -(dt/t_syn) * gs[syn][step-1] + inps_up + inps_rcr
-
+                dg = -(dt/t_syn) * gs[syn][step-1] + inps_up + inps_rcr
                 # store conductances
-                gs[syn][step] = gs[syn][step-1] + dgs
+                gs[syn][step] = gs[syn][step-1] + dg
+                
+            # calculate new AHP conductance
+            inps_ahp = self.w_ahp * spks[step-1]
+            
+            # decay ahp conductance and add new inputs
+            dg_ahp = (-dt/self.t_ahp) * g_ahp[step-1] + inps_ahp
+            # store ahp conductance
+            g_ahp[step] = g_ahp[step-1] + dg_ahp
 
-            # calculate current input resulting from conductances
-            is_g = [gs[syn][step]*(self.es_syn[syn]-vs[step-1]) for syn in self.syns]
+            # calculate current input resulting from synaptic conductances
+            is_g = [gs[syn][step] * (self.es_syn[syn] - vs[step-1]) for syn in self.syns]
+            # add in AHP current
+            is_g.append(g_ahp[step] * (self.e_ahp - vs[step-1]))
 
             # update membrane potential
             dvs = -(dt/self.t_m) * (vs[step-1] - self.e_leak) + np.sum(is_g, axis=0)
@@ -302,7 +344,7 @@ class LIFNtwk(object):
         # return NtwkResponse object
         return NtwkResponse(
             vs=vs, spks=spks, v_rest=self.e_leak, v_th=self.v_th,
-            gs=gs, ws_rcr=self.ws_rcr, ws_up=self.ws_up_init,
+            gs=gs, g_ahp=g_ahp, ws_rcr=self.ws_rcr, ws_up=self.ws_up_init,
             cs=cs, ws_plastic=ws_plastic, masks_plastic=masks_plastic)
 
 
@@ -360,7 +402,7 @@ class NtwkResponse(object):
     """
 
     def __init__(
-            self, vs, spks, v_rest, v_th, gs, ws_rcr, ws_up, cell_types=None,
+            self, vs, spks, v_rest, v_th, gs, g_ahp, ws_rcr, ws_up, cell_types=None,
             cs=None, ws_plastic=None, masks_plastic=None, place_field_centers=None):
         """Constructor."""
         # check args
@@ -373,6 +415,7 @@ class NtwkResponse(object):
         self.v_rest = v_rest
         self.v_th = v_th
         self.gs = gs
+        self.g_ahp = g_ahp
         self.ws_rcr = ws_rcr
         self.ws_up = ws_up
         self.cell_types = cell_types
@@ -400,6 +443,7 @@ class NtwkResponse(object):
 
         if save_gs:
             data['gs'] = self.gs
+            data['g_ahp'] = self.g_ahp
 
         if save_ws:
             data['ws_rcr'] = self.ws_rcr
