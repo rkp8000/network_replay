@@ -65,3 +65,68 @@ def load_time_file(time_file):
             raise KeyError('Item with key "{}" not found in file "{}".'.format(key, time_file))
 
     return data_t['timestamps'], data_t['fs']
+
+
+def downsample_spks(spks, num):
+    """
+    Downsample a vector spk train to have num equally spaced samples.
+    The downsampled spk value at a given time point is True if any spk occurred
+    in the window surrounding that time point, and zero otherwise.
+    
+    :param spks: 2-D logical array indicating spk times (rows are times, cols
+        are neurons)
+    :param num: number of time points in the resampled signal
+    """
+    window = len(spks) / num
+    
+    if window < 1:
+        err_msg = ('Provided "num" value must be less than len(spks); '
+                   'upsampling is not supported')
+        raise ValueError(err_msg)
+    
+    # just use a loop for now
+    
+    spks_down = np.zeros((num, spks.shape[1]), dtype=bool)
+    
+    for f_ctr in range(num):
+        
+        # get start and end of window for this downsampled time point
+        start = int(round(window * f_ctr))
+        end = int(round(window * (f_ctr + 1)))
+        
+        # assign the downsampled value to True for each neuron in which
+        # any spk occurred in this time window
+        spks_down[f_ctr] = np.any(spks[start:end], axis=0)
+    
+    return spks_down
+
+
+def downsample_ma(xs, num):
+    """
+    Downsample an array to have num equally spaced samples, where the downsampled
+    value at each time point is a moving average of the values in the corresponding window.
+    
+    :param xs: N-D array of values (1st dim is times, higher dims are variables)
+    :param num: number of time points in the resampled signal
+    """
+    window = len(xs) / num
+    
+    if window < 1:
+        err_msg = ('Provided "num" value must be less than len(xs); '
+                   'upsampling is not supported')
+        raise ValueError(err_msg)
+    
+    # just use a loop for now
+    xs_down = np.nan * np.zeros((num,) + xs.shape[1:])
+    
+    for f_ctr in range(num):
+        
+        # get start and end of window for this downsampled time point
+        start = int(round(window * f_ctr))
+        end = int(round(window * (f_ctr + 1)))
+        
+        # assign the downsampled value to the average of the values in
+        # the corresponding window
+        xs_down[f_ctr] = np.mean(xs[start:end], axis=0)
+    
+    return xs_down
