@@ -57,7 +57,7 @@ class LIFNtwk(object):
     In all weight matrices, rows index target, cols index source.
     
     :param t_m: membrane time constant (or 1D array)
-    :param e_leak: leak reversal potential (or 1D array)
+    :param e_l: leak reversal potential (or 1D array)
     :param v_th: firing threshold potential (or 1D array)
     :param v_reset: reset potential (or 1D array)
     :param e_ahp: afterhyperpolarization (potassium) reversal potential
@@ -83,7 +83,7 @@ class LIFNtwk(object):
     """
     
     def __init__(self,
-            t_m, e_leak, v_th, v_reset, t_r,
+            t_m, e_l, v_th, v_reset, t_r,
             e_ahp=0, t_ahp=np.inf, w_ahp=0,
             es_syn=None, ts_syn=None, ws_up=None, ws_rcr=None, 
             plasticity=None, sparse=True):
@@ -157,7 +157,7 @@ class LIFNtwk(object):
             
         # store network params
         self.t_m = t_m
-        self.e_leak = e_leak
+        self.e_l = e_l
         self.v_th = v_th
         self.v_reset = v_reset
         self.t_r = t_r
@@ -298,7 +298,7 @@ class LIFNtwk(object):
             is_g.append(g_ahp[step] * (self.e_ahp - vs[step-1]))
 
             # update membrane potential
-            dvs = -(dt/self.t_m) * (vs[step-1] - self.e_leak) + np.sum(is_g, axis=0)
+            dvs = -(dt/self.t_m) * (vs[step-1] - self.e_l) + np.sum(is_g, axis=0)
             vs[step] = vs[step-1] + dvs
 
             # force refractory neurons to reset potential
@@ -343,7 +343,7 @@ class LIFNtwk(object):
 
         # return NtwkResponse object
         return NtwkResponse(
-            vs=vs, spks=spks, v_rest=self.e_leak, v_th=self.v_th,
+            vs=vs, spks=spks, v_rest=self.e_l, v_th=self.v_th,
             gs=gs, g_ahp=g_ahp, ws_rcr=self.ws_rcr, ws_up=self.ws_up_init,
             cs=cs, ws_plastic=ws_plastic, masks_plastic=masks_plastic)
 
