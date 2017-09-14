@@ -1,3 +1,4 @@
+from copy import deepcopy
 import numbers
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
@@ -22,7 +23,41 @@ def set_font_size(ax, font_size, legend_font_size=None):
             text.set_fontsize(legend_font_size)
 
 
-def raster(ax, time_file, ntwk_file, order=None, colors='k'):
+def raster(ax, ts, spks, order=None, **scatter_kwargs):
+    """
+    Make a raster plot of spiking activity.
+    """
+    if not len(ts) == len(spks):
+        raise Exception('Arg "ts" must be same length as arg "spks".')
+
+    if order is not None:
+        spks = spks[:, order]
+    
+    # get all (spk time, nrn) pair for each spike
+    spk_tps, spk_nrns = spks.nonzero()
+    spk_ts = ts[spk_tps]
+    
+    scatter_kwargs = deepcopy(scatter_kwargs)
+    
+    if 'marker' not in scatter_kwargs:
+        scatter_kwargs['marker'] = '|'
+    if 'c' not in scatter_kwargs:
+        scatter_kwargs['c'] = 'k'
+    if 'lw' not in scatter_kwargs:
+        scatter_kwargs['lw'] = .3
+    if 's' not in scatter_kwargs:
+        scatter_kwargs['s'] = 10
+        
+    ax.scatter(spk_ts, spk_nrns, **scatter_kwargs)
+    
+    ax.set_xlim(ts[0], ts[-1])
+    ax.set_xlabel('t (s)')
+    ax.set_ylabel('Neuron')
+    
+    return ax
+    
+    
+def raster_old(ax, time_file, ntwk_file, order=None, colors='k'):
     """
     Make a raster plot of spiking activity from a ntwk simulation.
 
