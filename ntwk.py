@@ -46,6 +46,58 @@ def cxns_pcs_rcr(pfs, z_pc, l_pc):
     return cxns
 
 
+def ridge_h(shape, dens, hx):
+    """
+    Randomly sample PCs from along a horizontal "ridge", assigning them each a place-field
+    center and an EC->PC cxn weight.
+    
+    :param shape: tuple specifying ridge shape (m)
+    :param dens: number of place fields per m^2
+    :param hx: dict with keys:
+        'dists': array of uniformly spaced distances used to sample weights
+        'weights': distribution of EC->PC NMDA cxn weights to sample from as fn of dists
+    
+    :return: place field centers, EC->PC cxn weights
+    """
+    # sample number of nrns
+    n_pcs = np.random.poisson(shape[0] * shape[1] * dens)
+    
+    # sample place field positions
+    pfcs = np.random.uniform((-shape[0]/2, -shape[1]/2), (shape[0]/2, shape[1]/2), (n_pcs, 2)).T
+    
+    # sample EC->PC cxn weights according to dists to centerline
+    dd = np.mean(np.diff(hx['dists']))
+    dist_idxs = np.round(np.abs(pfcs[1]) / dd).astype(int)
+    
+    ws = []
+    for dist_idx in dist_idxs:
+        w_dstr = hx['ws_n_ec_pc'][:, min(dist_idx, len(hx['dists'])-1)]
+        ws.append(np.random.choice(w_dstr))
+    
+    return pfcs, ws
+
+
+# INITIAL CONDITIONS
+
+def sample_vs_gs_init(ws_n_pc_ec, v_g_init):
+    """
+    Return an initial membrane voltage and NMDA conductance for each
+    of several PCs, depending on their EC->PC cxn weight.
+    """
+    
+    dw = np.mean(np.diff(v_g_init['weights']))
+    w_idxs = np.round((ws_n_pc_ec - v_g_init['weights'][0])/ dw).astype(int)
+    
+    vs = np.nan * np.zeros(len(ws_n_pc_ec))
+    gs = {'NMDA': np.nan * np.zeros(len(ws_n_pc_ec))}
+    
+    for nrn_ctr, w_idx in enumerate(w_idxs):
+        vs[nrn_ctr] = np.random.choice(v_g_init['vs'][:, w_idx])
+        gs['NMDA'][nrn_ctr] = np.random.choice(v_g_init['gs'][:, w_idx])
+        
+    return vs, gs
+
+
 # NETWORK CLASSES AND FUNCTIONS
 
 class LIFNtwk(object):
