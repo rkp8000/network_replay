@@ -231,7 +231,7 @@ class LIFNtwk(object):
         self.ws_rcr = ws_rcr
         self.ws_up_init = ws_up
 
-    def run(self, spks_up, dt, vs_init, gs_init=None, g_ahp_init=None):
+    def run(self, spks_up, dt, vs_init=None, gs_init=None, g_ahp_init=None):
         """
         Run a simulation of the network.
 
@@ -246,6 +246,8 @@ class LIFNtwk(object):
         """
 
         # validate arguments
+        if vs_init is None:
+            vs_init = self.e_l * np.ones(self.n)
         if gs_init is None:
             gs_init = {syn: np.zeros(self.n) for syn in self.syns}
         if g_ahp_init is None:
