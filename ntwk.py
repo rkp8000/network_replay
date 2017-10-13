@@ -231,7 +231,9 @@ class LIFNtwk(object):
         self.ws_rcr = ws_rcr
         self.ws_up_init = ws_up
 
-    def run(self, spks_up, dt, vs_init=None, gs_init=None, g_ahp_init=None):
+    def run(
+            self, spks_up, dt, vs_init=None, gs_init=None, g_ahp_init=None,
+            vs_forced=None, spks_forced=None):
         """
         Run a simulation of the network.
 
@@ -241,6 +243,10 @@ class LIFNtwk(object):
         :param vs_init: initial vs
         :param gs_init: initial gs (dict of 1-D arrays)
         :param g_ahp_init: initial g_ahp (1-D array)
+        :param vs_forced: voltages to force at given time points (rows are time points,
+            cols are neurons)
+        :param spks_forced: bool array of spikes to force at given time points (rows are 
+            time points, cols are neurons)
 
         :return: network response object
         """
@@ -252,6 +258,11 @@ class LIFNtwk(object):
             gs_init = {syn: np.zeros(self.n) for syn in self.syns}
         if g_ahp_init is None:
             g_ahp_init = np.zeros(self.n)
+            
+        if vs_forced is None:
+            vs_forced = np.zeros((0, self.n))
+        if spks_forced is None:
+            spks_forced = np.zeros((0, self.n), dtype=bool)
         
         if type(spks_up) != np.ndarray or spks_up.ndim != 2:
             raise TypeError('"inps_upstream" must be a 2D array.')
@@ -357,12 +368,22 @@ class LIFNtwk(object):
 
             # force refractory neurons to reset potential
             vs[step][rp_ctrs > 0] = self.v_reset[rp_ctrs > 0]
-
+            
+            # force vs if desired
+            if step < len(vs_forced):
+                mask = ~np.isnan(vs_forced[step])
+                vs[step][mask] = vs_forced[step][mask]
+             
             # identify spks
             spks[step] = vs[step] >= self.v_th
+            
+            # force extra spks if desired
+            if step < len(spks_forced):
+                spks[step][spks_forced[step] == 1] = 1
+             
             # reset membrane potentials of spiking neurons
             vs[step][spks[step]] = self.v_reset[spks[step]]
-
+            
             # set refractory counters for spiking neurons
             rp_ctrs[spks[step]] = self.t_r
             # decrement refractory counters for all neurons
