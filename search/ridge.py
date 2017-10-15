@@ -1,7 +1,9 @@
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta
 import importlib
+import numpy as np
 import time
+import traceback
 
 from db import make_session, d_models
 
@@ -40,8 +42,8 @@ def search(role, obj, P, max_iter=10, seed=None):
     
     # make new searcher
     searcher = d_models.RidgeSearcher(
-        sim_id=cfg.SIM_ID,
-        last_active=datetime.now()
+        smln_id=cfg.SMLN_ID,
+        last_active=datetime.now(),
         last_error=None)
     
     session.add(searcher)
@@ -64,7 +66,7 @@ def search(role, obj, P, max_iter=10, seed=None):
             validate(cfg, ctr)
             
             # define parameter conversions
-            p_to_x, x_to_p = make_param_conversions(cfg.P_RANGES)
+            p_to_x, x_to_p = make_param_conversions(cfg)
 
             # "additional step required" flag
             step = True
@@ -101,6 +103,8 @@ def search(role, obj, P, max_iter=10, seed=None):
                 
                 if force_ in ['random', 'center']:
                     since_jump = 0
+                else:
+                    since_jump += 1
                
             elif np.random.rand() < cfg.Q_JUMP:  # jump
                 
@@ -128,7 +132,7 @@ def search(role, obj, P, max_iter=10, seed=None):
                 move_to.append(x_cand)
             
             # ensure x_cand is within bounds
-            x_cand = correct_if_out_of_bounds(x_cand, cfg)
+            x_cand = fix_x_if_out_of_bounds(cfg, x_cand)
             
             # convert x_cand to param dict and compute objective function
             p_cand = x_to_p(x_cand)
@@ -149,26 +153,82 @@ def search(role, obj, P, max_iter=10, seed=None):
             else:
                 x = x_prev.copy()
                 
-            # update searcher activity
-            searcher.last_active = datetime.now()
+            # update searcher error msg
             searcher.error = None
             searcher.traceback = None
-            session.add(searcher)
-            session.commit()
             
-        except:
+        except Exception as e:
             
-            # update searcher activity
-            searcher.last_active = datetime.now()
-            searcher.error = 'Unknown.'
-            searcher.traceback = 'Wubawubadubdub.'
-            session.add(searcher)
-            session.commit()
-            
+            # update searcher error msg
+            searcher.error = e.__class__.__name__
+            searcher.traceback = traceback.format_exc()
+        
+        searcher.last_active = datetime.now()
+        session.add(searcher)
+        session.commit()
+        
+        if searcher.error is not None:
             time.sleep(5)
+            
+    return True
 
 
-# OBJECTIVE FUNCTION AND HELPER
+def search_status(smln_id, role=None, recent=30):
+    """Return IDs of recently active searchers under specified smln/role.
+    
+    :param smln_id: simulation id
+    :param role: conditioning role for searcher lookup
+    :param recent: max time searcher must have been active within to be recent
+    """
+    earliest = datetime.now() - timedelta(0, recent)
+    
+    # get searchers
+    session = make_session()
+    searchers = session.query(d_models.RidgeSearcher).filter(
+        d_models.RidgeSearcher.last_active >= earliest)
+    
+    if role is not None:
+        searchers = searchers.filter(d_models.RidgeSearcher.role == role)
+    
+    session.close()
+    
+    # check for searchers with error messages
+    suspended = []
+    errors = []
+    
+    for searcher in searchers:
+        if searcher.error is not None:
+            suspended.append(searcher.id)
+            errors.append(searcher.error)
+    
+    # print results
+    print('{} searchers active in last {} s.'.format(searchers.count(), recent))
+    print('The following searchers were suspended by errors:')
+    
+    for suspended_, error in zip(supsended, errors):
+        print('{}: ERROR: "{}".'.format(suspended_, error))
+        
+    print('Look up error tracebacks using read_search_error(id).')
+
+
+def read_search_error(searcher_id):
+    """Print error traceback for specific searcher_id."""
+    
+    # get searcher
+    session = make_session()
+    searcher = session.query(d_models.RidgeSearcher).get(searcher_id)
+    session.close()
+    
+    if searcher.error is None and searcher.traceback is None:
+        print('No error found in searcher {}.'.format(searcher_id))
+        
+    else:
+        print('ID: {}'.format(searcher_id))
+        print('ERROR: {}\n'.format(searcher.error))
+        print(searcher.traceback)
+    
+
+# RIDGE-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPER
 
 def activity_and_speed(rsp):
     """Calculate propagation activity level and speed from ntwk response."""
@@ -176,7 +236,7 @@ def activity_and_speed(rsp):
     pass
 
 
-def obj(p, seed):
+def ntwk_metrics(p, seed):
     """
     Run a trial given dict of param values and return dict of results.
     
@@ -262,7 +322,7 @@ def validate(cfg, ctr):
     ]
     
     if ctr == 0:
-        required = ['SIM_ID', 'START'] + required
+        required = ['SMLN_ID', 'START'] + required
         
     missing = []
     for setting in required:
@@ -341,9 +401,18 @@ def validate(cfg, ctr):
     for setting in settings:
         if not isinstance(getattr(cfg.setting), [int, float]):
             invalid.append(setting)
+        elif not cfg.setting >= 0:
+            invalid.append(setting)
     
     if invalid:
-        raise Exception('Settings {} must be int/float.'.format(invalid))
+        raise Exception('Settings {} must be non-neg. int/float.'.format(invalid))
+
+    # validate beta normalization
+    if not (cfg.B_PREV_Y + cfg.B_PREV_K + cfg.B_PREV_S) == cfg.B_PREV_SUM:
+        raise Exception('B_PREV components must add to B_PREV_SUM.')
+        
+    if not (cfg.B_PHI_Y + cfg.B_PHI_K + cfg.B_PHI_S) == cfg.B_PHI_SUM:
+        raise Exception('B_PHI components must add to B_PHI_SUM.')
         
     return True
     
@@ -382,11 +451,11 @@ def rslt_from_trial(trial):
     }
 
 
-def make_param_conversions(p_ranges):
+def make_param_conversions(cfg):
     """
     Return functions for converting from p to x and x to p.
-    
-    :param p_ranges: list of two-element tuples; first element is param name,
+    :param cfg: config module containing P_RANGES attribute, which is:
+        list of two-element tuples; first element is param name,
         second element is range, which can either be single-element list
         specifying fixed value, or three-element list giving lower bound, upper
         bound, and scale (approx. resolution).
@@ -394,10 +463,11 @@ def make_param_conversions(p_ranges):
     
     def p_to_x(p):
         """Convert param dict to x."""
+        assert len(p) == len(cfg.P_RANGES)
         
         x = np.nan * np.zeros(len(p))
         
-        for ctr, (name, p_range) in enumerate(p_ranges):
+        for ctr, (name, p_range) in enumerate(cfg.P_RANGES):
             
             if len(p_range) == 1:  # fixed val
                 x[ctr] = 0
@@ -411,10 +481,11 @@ def make_param_conversions(p_ranges):
     
     def x_to_p(x):
         """Convert x to param dict."""
+        assert len(x) == len(cfg.P_RANGES)
         
         p = {}
         
-        for ctr, (name, p_range) in enumerate(p_ranges):
+        for ctr, (name, p_range) in enumerate(cfg.P_RANGES):
             
             if len(p_range) == 1:  # fixed val
                 p[name] = p_range[0]
@@ -443,6 +514,29 @@ def force_to_x(cfg, f):
     return x
 
 
+def fix_x_if_out_of_bounds(cfg, x_cand):
+    """Return a corrected x that is not out of bounds."""
+    x_correct = []
+    
+    for x_, (_, p_range) in zip(x_cand, cfg.P_RANGES):
+        
+        if len(p_range) == 1:
+            lb = 0
+            ub = 0
+        else:
+            lb = -p_range[2] / 2
+            ub = p_range[2] / 2
+            
+        if x_ < lb:
+            x_correct.append(lb)
+        elif x_ > ub:
+            x_correct.append(ub)
+        else:
+            x_correct.append(deepcopy(x_))
+    
+    return np.array(x_correct)
+            
+    
 def sample_x_rand(cfg):
     """Sample random x."""
     x = np.nan * np.ones(len(cfg.P_RANGES))
@@ -498,7 +592,7 @@ def sample_x_prev(cfg, session, p_to_x):
     """Sample previously visited x."""
     
     # get all past trials
-    trials = session.query(d_models.RidgeTrial).filter_by(sim_id=cfg.SIM_ID)
+    trials = session.query(d_models.RidgeTrial).filter_by(smln_id=cfg.SMLN_ID)
     
     # get param and rslt dicts
     ps = [trial_to_p(trial) for trial in trials]
@@ -537,9 +631,12 @@ def compute_phi_mean(cfg, xs, rslts):
     dx_sum = dxs.T.dot(w)
 
     ## get optimal direction
-    phi_best = dx_sum / np.linalg.norm(dx_sum)
+    if np.linalg.norm(dx_sum) != 0:
+        phi_best = dx_sum / np.linalg.norm(dx_sum)
+    else:
+        phi_best = np.zeros(dx_sum.shape)
     
-    return = cfg.L_PHI*phi_best
+    return cfg.L_PHI*phi_best
 
 
 def sample_x_step(cfg, session, searcher, x_prev, since_jump, p_to_x):
@@ -598,7 +695,7 @@ def save_ridge_trial(session, searcher, seed, p, rslt):
         w_g_pc_inh=p['W_G_PC_INH'],
         
         w_n_pc_ec_i=p['W_N_PC_EC_I'],
-        rate_ec=p['RATE_EC']
+        rate_ec=p['RATE_EC'],
         
         propagation=rslt['PROPAGATION'],
         activity=rslt['ACTIVITY'],
