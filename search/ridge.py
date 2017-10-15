@@ -12,6 +12,7 @@ from db import make_session, d_models
 
 SEARCH_CONFIG_ROOT = 'search.config.ridge'
 MAX_SEED = 10000
+WAIT_AFTER_ERROR = 10
 
 
 # SEARCH FUNCTIONS
@@ -168,7 +169,7 @@ def search(role, obj, P, max_iter=10, seed=None):
         session.commit()
         
         if searcher.error is not None:
-            time.sleep(5)
+            time.sleep(WAIT_AFTER_ERROR)
             
     return True
 
