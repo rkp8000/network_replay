@@ -10,7 +10,7 @@ from db import make_session, d_models
 
 # CONFIGURATION
 
-SEARCH_CONFIG_ROOT = 'search.config.ridge'
+CONFIG_ROOT = 'search.config.ridge'
 MAX_SEED = 10000
 WAIT_AFTER_ERROR = 10
 
@@ -25,18 +25,30 @@ def launch_searchers(role, obj, n, P, max_iter=10, seed=None):
     pass
     
     
-def search(role, obj, P, max_iter=10, seed=None):
+def search(
+        role, obj, P, max_iter=10000,
+        seed=None, config_root=CONFIG_ROOT, commit=None):
     """
     Launch instance of searcher exploring potentiated ridge trials.
     
     :param role: searcher role, which should correspond to search config file
     :param obj: objective function
     :param P: general project parameters module
+    :param max_iter: max number of search iterations before quitting
+    :param seed: RNG seed
+    :param config_root: module to look for config files in
+    :param commit: current git commit id
     """
+    if commit is None:
+        commit = input(
+            'Please commit relevant files and enter commit id (or "q" to quit)')
+        if commit.lower() == 'q':
+            return
+        
     np.random.seed(seed)
     
     # import initial config
-    cfg = importlib.import_module('.'.join([SEARCH_CONFIG_ROOT, role]))
+    cfg = importlib.import_module('.'.join([config_root, role]))
     
     # connect to db
     session = make_session()
@@ -44,8 +56,11 @@ def search(role, obj, P, max_iter=10, seed=None):
     # make new searcher
     searcher = d_models.RidgeSearcher(
         smln_id=cfg.SMLN_ID,
+        role=role,
         last_active=datetime.now(),
-        last_error=None)
+        error=None,
+        traceback=None,
+        commit=commit)
     
     session.add(searcher)
     session.commit()
@@ -170,8 +185,10 @@ def search(role, obj, P, max_iter=10, seed=None):
         
         if searcher.error is not None:
             time.sleep(WAIT_AFTER_ERROR)
+    
+    session.close()
             
-    return True
+    return searcher.id
 
 
 def search_status(smln_id, role=None, recent=30):
@@ -203,13 +220,13 @@ def search_status(smln_id, role=None, recent=30):
             errors.append(searcher.error)
     
     # print results
-    print('{} searchers active in last {} s.'.format(searchers.count(), recent))
+    print('{} searchers active in last {} s.\n'.format(searchers.count(), recent))
     print('The following searchers were suspended by errors:')
     
-    for suspended_, error in zip(supsended, errors):
+    for suspended_, error in zip(suspended, errors):
         print('{}: ERROR: "{}".'.format(suspended_, error))
         
-    print('Look up error tracebacks using read_search_error(id).')
+    print('\nLook up error tracebacks using read_search_error(id).\n')
 
 
 def read_search_error(searcher_id):
@@ -220,13 +237,19 @@ def read_search_error(searcher_id):
     searcher = session.query(d_models.RidgeSearcher).get(searcher_id)
     session.close()
     
+    if searcher is None:
+        print('Searcher with ID {} not found.'.format(searcher_id))
+        return
+    
     if searcher.error is None and searcher.traceback is None:
         print('No error found in searcher {}.'.format(searcher_id))
+        return
         
     else:
         print('ID: {}'.format(searcher_id))
         print('ERROR: {}\n'.format(searcher.error))
         print(searcher.traceback)
+        return
     
 
 # RIDGE-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPER
@@ -237,7 +260,7 @@ def activity_and_speed(rsp):
     pass
 
 
-def ntwk_metrics(p, seed):
+def ntwk_obj(p, seed):
     """
     Run a trial given dict of param values and return dict of results.
     
@@ -361,7 +384,7 @@ def validate(cfg, ctr):
             raise Exception('UB must exceed LB for "{}" range.'.format(key))
     
     # validate START and FORCES
-    forces_all = [START] 
+    forces_all = [cfg.START] 
     keys_all = ['START']
     
     if hasattr(cfg, 'FORCE'):
@@ -400,9 +423,9 @@ def validate(cfg, ctr):
     
     invalid = []
     for setting in settings:
-        if not isinstance(getattr(cfg.setting), [int, float]):
+        if not isinstance(getattr(cfg, setting), (int, float)):
             invalid.append(setting)
-        elif not cfg.setting >= 0:
+        elif not getattr(cfg, setting) >= 0:
             invalid.append(setting)
     
     if invalid:

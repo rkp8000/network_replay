@@ -1,5 +1,5 @@
 from sqlalchemy import Column, ForeignKey
-from sqlalchemy import Boolean, DateTime, Float, String
+from sqlalchemy import Boolean, DateTime, Float, Integer, String
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -12,9 +12,13 @@ class RidgeSearcher(Base):
     
     id = Column(Integer, primary_key=True)
     
-    sim_id = Column(String)
+    smln_id = Column(String)
+    role = Column(String)
     last_active = Column(DateTime)
-    last_error = Column(String)
+    error = Column(String)
+    traceback = Column(String)
+    
+    commit = Column(String)
     
     
 class RidgeTrial(Base):
@@ -25,6 +29,8 @@ class RidgeTrial(Base):
     
     searcher_id = Column(Integer, ForeignKey('ridge_searcher.id'))
     searcher = relationship('RidgeSearcher', backref='trials')
+    
+    seed = Column(Integer)
     
     # parameters
     ridge_h = Column(Float)
