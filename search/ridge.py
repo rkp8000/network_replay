@@ -41,9 +41,9 @@ def search(
     """
     if commit is None:
         commit = input(
-            'Please commit relevant files and enter commit id (or "q" to quit)')
+            'Please commit relevant files and enter commit id (or "q" to quit): ')
         if commit.lower() == 'q':
-            return
+            raise KeyboardInterrupt('Execution halted by user.')
         
     np.random.seed(seed)
     
@@ -145,7 +145,6 @@ def search(
             if step:
                 x_cand = sample_x_step(
                     cfg, session, searcher, x_prev, since_jump, p_to_x)
-                move_to.append(x_cand)
             
             # ensure x_cand is within bounds
             x_cand = fix_x_if_out_of_bounds(cfg, x_cand)
@@ -678,7 +677,7 @@ def sample_x_step(cfg, session, searcher, x_prev, since_jump, p_to_x):
         # get past n trials with this searcher id
         trials = session.query(d_models.RidgeTrial).\
             filter_by(searcher_id=searcher.id).\
-            order_by(d_model.RidgeTrial.id.desc()).limit(n).all()
+            order_by(d_models.RidgeTrial.id.desc()).limit(n).all()
             
         ## get params, xs, and measurables for past results
         ps = [trial_to_p(trial) for trial in trials]

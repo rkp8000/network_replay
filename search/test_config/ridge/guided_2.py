@@ -1,6 +1,12 @@
-SMLN_ID = 'test_random'
+SMLN_ID = 'test_guided'
 
-START = 'center'
+START = {
+    'RIDGE_H': 1, 'RIDGE_W': 2, 'RHO_PC': 1,
+    'Z_PC': 2, 'L_PC': 1, 'W_A_PC_PC': 2,
+    'P_A_INH_PC': 1, 'W_A_INH_PC': 2,
+    'P_G_PC_INH': 3, 'W_G_PC_INH': 5,
+    'W_N_PC_EC_I': 7, 'RATE_EC': 9,
+}
 
 # ranges can be:
 #     3-element list, where first elements are lb, ub,
@@ -8,24 +14,27 @@ START = 'center'
 #
 #     1-element list specifying fixed param value
 
-P_RANGES = [
+P_RANGES = (
     ('RIDGE_H', [0, 10, 1]),
     ('RIDGE_W', [0, 10, 1]),
-    ('RHO_PC', [0, 10, 1]),
-    ('Z_PC', [0, 10, 1]),
     
-    ('L_PC', [10, 30, 1]),
-    ('W_A_PC_PC', [10, 30, 1]),
-    ('P_A_INH_PC', [10, 30, 1]),
-    ('W_A_INH_PC', [10, 30, 1]),
+    ('RHO_PC', [0, 10, 1]),
+        
+    ('Z_PC', [0, 10, 5]),
+    ('L_PC', [0, 10, 5]),
+    ('W_A_PC_PC', [0, 10, 1]),
 
-    ('P_G_PC_INH', [1]),
-    ('W_G_PC_INH', [2]),
-    ('W_N_PC_EC_I', [5]),
+    ('P_A_INH_PC', [0, 10, 1]),
+    ('W_A_INH_PC', [0, 10, 1]),
+
+    ('P_G_PC_INH', [3]),
+    ('W_G_PC_INH', [5]),
+
+    ('W_N_PC_EC_I', [7]),
     ('RATE_EC', [9]),
-]
+)
 
-Q_JUMP = 1
+Q_JUMP = 0
 
 Q_NEW = 1
 
