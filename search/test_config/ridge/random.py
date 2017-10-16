@@ -29,7 +29,7 @@ Q_JUMP = 1
 
 Q_NEW = 1
 
-SGM_RAND = 0.1
+SGM_RAND = 0.3
 
 A_PREV = 1
 B_PREV_Y = 1

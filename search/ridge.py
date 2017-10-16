@@ -190,7 +190,7 @@ def search(
     return searcher.id
 
 
-def search_status(smln_id, role=None, recent=30):
+def search_status(smln_id=None, role=None, recent=30):
     """Return IDs of recently active searchers under specified smln/role.
     
     :param smln_id: simulation id
@@ -204,6 +204,8 @@ def search_status(smln_id, role=None, recent=30):
     searchers = session.query(d_models.RidgeSearcher).filter(
         d_models.RidgeSearcher.last_active >= earliest)
     
+    if smln_id is not None:
+        searchers = searchers.filter(d_models.RidgeSearcher.smln_id == smln_id)
     if role is not None:
         searchers = searchers.filter(d_models.RidgeSearcher.role == role)
     
@@ -615,7 +617,9 @@ def sample_x_prev(cfg, session, p_to_x):
     """Sample previously visited x."""
     
     # get all past trials
-    trials = session.query(d_models.RidgeTrial).filter_by(smln_id=cfg.SMLN_ID)
+    trials = session.query(d_models.RidgeTrial).join(
+        d_models.RidgeSearcher).filter(
+        d_models.RidgeSearcher.smln_id == cfg.SMLN_ID).all()
     
     # get param and rslt dicts
     ps = [trial_to_p(trial) for trial in trials]
