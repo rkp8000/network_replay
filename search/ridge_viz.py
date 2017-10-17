@@ -11,11 +11,13 @@ from plot import raster as _raster
 from plot import set_font_size
 
 
-def trial_raster(
-        trial_id, ax_height=6, colors=(('PC', 'k'), ('INH', 'r')),
+def raster(
+        trial, ax_height=6, colors=(('PC', 'k'), ('INH', 'r')),
         show_all_rsps=False, **scatter_kwargs):
     """
     Display a raster plot for each of the ntwk responses used in a given trial.
+    
+    :param trial: trial identifier or instance
     """
     # set default scatter plot kwargs
     scatter_kwargs = deepcopy(scatter_kwargs)
@@ -30,14 +32,16 @@ def trial_raster(
         scatter_kwargs['s'] = 10
         
     # get trial params
-    session = make_session()
-    trial = session.query(d_models.RidgeTrial).get(trial_id)
-    session.close()
+    if isinstance(trial, int):
+        session = make_session()
+        trial_id = deepcopy(trial)
+        trial = session.query(d_models.RidgeTrial).get(trial_id)
+        session.close()
     
-    if trial is None:
-        print('Trial ID {} not found.'.format(trial_id))
-        return
-    
+        if trial is None:
+            print('Trial ID {} not found.'.format(trial_id))
+            return
+
     p = ridge.trial_to_p(trial)
     
     # run ntwk obj function
