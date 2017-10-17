@@ -12,7 +12,7 @@ from db import make_session, d_models
 
 CONFIG_ROOT = 'search.config.ridge'
 MAX_SEED = 10000
-WAIT_AFTER_ERROR = 10
+WAIT_AFTER_ERROR = 5
 
 
 # SEARCH FUNCTIONS
@@ -26,8 +26,8 @@ def launch_searchers(role, obj, n, P, max_iter=10, seed=None):
     
     
 def search(
-        role, obj, P, max_iter=10000,
-        seed=None, config_root=CONFIG_ROOT, commit=None):
+        role, obj, P, max_iter=10000, seed=None,
+        config_root=CONFIG_ROOT, commit=None, verbose=False):
     """
     Launch instance of searcher exploring potentiated ridge trials.
     
@@ -38,6 +38,7 @@ def search(
     :param seed: RNG seed
     :param config_root: module to look for config files in
     :param commit: current git commit id
+    :param verbose: set to True to print log info to console
     """
     if commit is None:
         commit = input(
@@ -65,6 +66,9 @@ def search(
     session.add(searcher)
     session.commit()
     
+    if verbose:
+        print('SEARCHER ID = {}'.format(searcher.id))
+        
     # initialize useful aux. vbls
     since_jump = 0
     last_force = None
@@ -80,6 +84,8 @@ def search(
             
             # validate config
             validate(cfg, ctr)
+            
+            error_printed = False
             
             # define parameter conversions
             p_to_x, x_to_p = make_param_conversions(cfg)
@@ -97,6 +103,9 @@ def search(
                     force = cfg.FORCE[searcher.id]
                     forces_left = len(force)
                     last_force = deepcopy(force)
+                    
+                    if verbose:
+                        print('New forcing sequence detected.')
                     
                 # do nothing if no change detected
                 # ...
@@ -174,9 +183,16 @@ def search(
             
         except Exception as e:
             
+            tb = traceback.format_exc()
+            
+            if verbose and not error_printed:
+                print('Configuration error detected.')
+                print(tb)
+                error_printed = True
+                
             # update searcher error msg
             searcher.error = e.__class__.__name__
-            searcher.traceback = traceback.format_exc()
+            searcher.traceback = tb
         
         searcher.last_active = datetime.now()
         session.add(searcher)
@@ -389,11 +405,11 @@ def validate(cfg, ctr):
     keys_all = ['START']
     
     if hasattr(cfg, 'FORCE'):
-        if not np.all([isinstance(v, list) for v in FORCE.values()]):
+        if not np.all([isinstance(v, list) for v in cfg.FORCE.values()]):
             raise Exception('All forces be lists.')
             
-        forces_all += sum([v for v in FORCE.values()], [])
-        keys_all += sum([len(v) * [k] for k, v in FORCE.items()], [])
+        forces_all += sum([v for v in cfg.FORCE.values()], [])
+        keys_all += sum([len(v) * [k] for k, v in cfg.FORCE.items()], [])
     
     for key, force in zip(keys_all, forces_all):
         
