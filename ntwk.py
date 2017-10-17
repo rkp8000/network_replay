@@ -418,7 +418,7 @@ class LIFNtwk(object):
 
         # return NtwkResponse object
         return NtwkResponse(
-            vs=vs, spks=spks, v_rest=self.e_l, v_th=self.v_th,
+            ts=ts, vs=vs, spks=spks, v_rest=self.e_l, v_th=self.v_th,
             gs=gs, g_ahp=g_ahp, ws_rcr=self.ws_rcr, ws_up=self.ws_up_init,
             cs=cs, ws_plastic=ws_plastic, masks_plastic=masks_plastic)
 
@@ -463,6 +463,7 @@ class NtwkResponse(object):
     """
     Class for storing network response parameters.
 
+    :param ts: timestamp vector
     :param vs: membrane potentials
     :param spks: spk times
     :param gs: syn-dict of conductances
@@ -477,7 +478,7 @@ class NtwkResponse(object):
     """
 
     def __init__(
-            self, vs, spks, v_rest, v_th, gs, g_ahp, ws_rcr, ws_up, cell_types=None,
+            self, ts, vs, spks, v_rest, v_th, gs, g_ahp, ws_rcr, ws_up, cell_types=None,
             cs=None, ws_plastic=None, masks_plastic=None, pfcs=None):
         """Constructor."""
         # check args
@@ -485,6 +486,7 @@ class NtwkResponse(object):
             raise ValueError(
                 'If "cell_types" is provided, all cells must have a type.')
             
+        self.ts = ts
         self.vs = vs
         self.spks = spks
         self.v_rest = v_rest
@@ -530,3 +532,8 @@ class NtwkResponse(object):
             data['pfcs'] = self.pfcs
 
         return save(save_file, data)
+    
+    @property
+    def n(self):
+        """Number of neurons."""
+        return self.vs.shape[1]
