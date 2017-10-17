@@ -473,12 +473,12 @@ class NtwkResponse(object):
     :param ws_plastic: syn-dict of time-courses of plastic weights
     :param masks_plastic: syn-dict of masks specifying which weights the plastic
         ones correspond to
-    :param place_field_centers: array of cell place field centers
+    :param pfcs: array of cell place field centers
     """
 
     def __init__(
             self, vs, spks, v_rest, v_th, gs, g_ahp, ws_rcr, ws_up, cell_types=None,
-            cs=None, ws_plastic=None, masks_plastic=None, place_field_centers=None):
+            cs=None, ws_plastic=None, masks_plastic=None, pfcs=None):
         """Constructor."""
         # check args
         if (cell_types is not None) and (len(cell_types) != vs.shape[1]):
@@ -497,7 +497,7 @@ class NtwkResponse(object):
         self.cs = cs
         self.ws_plastic = ws_plastic
         self.masks_plastic = masks_plastic
-        self.place_field_centers = place_field_centers
+        self.pfcs = pfcs
 
     def save(self, save_file, save_gs=False, save_ws=True, save_place_fields=True):
         """
@@ -527,6 +527,6 @@ class NtwkResponse(object):
             data['masks_plastic'] = self.masks_plastic
 
         if save_place_fields:
-            data['place_field_centers'] = self.place_field_centers
+            data['pfcs'] = self.pfcs
 
         return save(save_file, data)

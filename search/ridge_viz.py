@@ -11,7 +11,9 @@ from plot import raster as _raster
 from plot import set_font_size
 
 
-def trial_raster(trial_id, ax_height=6, colors=(('PC', 'k'), ('INH', 'r')), **scatter_kwargs):
+def trial_raster(
+        trial_id, ax_height=6, colors=(('PC', 'k'), ('INH', 'r')),
+        show_all_rsps=False, **scatter_kwargs):
     """
     Display a raster plot for each of the ntwk responses used in a given trial.
     """
@@ -42,7 +44,25 @@ def trial_raster(trial_id, ax_height=6, colors=(('PC', 'k'), ('INH', 'r')), **sc
     rslts, rsps = ridge.ntwk_obj(p=p, seed=trial.seed, return_rsps=True)
     
     # get final rsps for each ntwk
-    rsps_final = [rsps_[-1] for rsps_ in rsps]
+    if show_all_rsps:
+        
+        # show all runs for each ntwk (for debugging)
+        rsps_final = sum(rsps, [])
+        titles = []
+        
+        for n_ctr, rsps_ in enumerate(rsps):
+            
+            titles.extend([
+                'Ntwk {}: Run {}'.format(n_ctr + 1, r_ctr + 1)
+                for r_ctr in range(len(rsps_))
+            ])
+            
+    else:
+        rsps_final = [rsps_[-1] for rsps_ in rsps]
+        titles = [
+            'Ntwk {}: Final Run'.format(n_ctr)
+            for n_ctr in range(len(rsps_final))
+        ]
     
     # plot rasters
     n = len(rsps_final)
@@ -51,8 +71,9 @@ def trial_raster(trial_id, ax_height=6, colors=(('PC', 'k'), ('INH', 'r')), **sc
     fig, axs = plt.subplots(n, 1, tight_layout=True, squeeze=False)
     axs = axs[:, 0]
     
-    for rsp, ax in zip(rsps_final, axs):
-        # order cells
+    for rsp, title, ax in zip(rsps_final, titles, axs):
+        
+        # order cells by place fields
         if rsp.pfcs is None:
             print('WARNING: No place fields found in ntwk response.')
             order = np.arange(rsp.n)
@@ -76,6 +97,8 @@ def trial_raster(trial_id, ax_height=6, colors=(('PC', 'k'), ('INH', 'r')), **sc
             scatter_kwargs['c'] = cs
         
         _raster(ax, rsp.ts, rsp.spks, order, **scatter_kwargs)
+        
+        ax.set_title(title)
         
         set_font_size(ax, 16)
         

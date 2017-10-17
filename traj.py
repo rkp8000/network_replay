@@ -96,7 +96,7 @@ class RandomTraj(Traj):
         self.vs = vs
 
 
-def upstream_spks_from_traj(ts, xys, centers, stds, max_rates):
+def upstream_spks_from_traj(ts, xys, pfcs, stds, max_rates):
     """
     Generate a set of "upstream" spks from a trajectory sequence
     given the tuning curves of the cells.
@@ -107,14 +107,14 @@ def upstream_spks_from_traj(ts, xys, centers, stds, max_rates):
 
     :param ts: timestamp array
     :param xys: position array (T x 2)
-    :param centers: tuning curve centers for each neuron (2 x N)
+    :param pfcs: tuning curve centers for each neuron (2 x N)
     :param stds: tuning curve widths for each neuron (N-length array)
     :param max_rates: spk rate for tuning curve max for each neuron
     :return: upstream spk trains (T x N)
     """
 
     n_steps = len(ts)
-    n = centers.shape[1]
+    n = pfcs.shape[1]
 
     if not len(xys) == len(ts):
         raise ValueError('Argument "xys" must have same length as "ts".')
@@ -126,8 +126,8 @@ def upstream_spks_from_traj(ts, xys, centers, stds, max_rates):
     dt = np.mean(np.diff(ts))
 
     # get displacement of trajectory to each center over time
-    dxs_1 = np.tile(xys[:, [0]], (1, n)) - np.tile(centers[[0], :], (n_steps, 1))
-    dxs_2 = np.tile(xys[:, [1]], (1, n)) - np.tile(centers[[1], :], (n_steps, 1))
+    dxs_1 = np.tile(xys[:, [0]], (1, n)) - np.tile(pfcs[[0], :], (n_steps, 1))
+    dxs_2 = np.tile(xys[:, [1]], (1, n)) - np.tile(pfcs[[1], :], (n_steps, 1))
 
     # get firing rates
     stds = np.tile(stds[None, :], (n_steps, 1))
@@ -152,7 +152,7 @@ class InferredTraj(Traj):
     """
     
     @staticmethod
-    def infer_positions(ts, spks, window, place_field_centers):
+    def infer_positions(ts, spks, window, pfcs):
         """
         Infer a sequence of positions and uncertainties from
         the spk trains of a set of place cells and their place field centers.
@@ -160,16 +160,16 @@ class InferredTraj(Traj):
         :param ts: timestamp sequence
         :param spks: multi-cell spk train (rows are time points, cols are cells)
         :param window: length of window (s) to use to count spks over
-        :param place_field_centers: place-field centers of all cells
+        :param pfcs: place field centers of all cells
             (rows are x, y; cols are cells)
         """
         if not len(ts) == len(spks):
             raise ValueError('spk array must be same length as timestamp array.')
         
-        if not spks.shape[1] == place_field_centers.shape[1]:
-            raise ValueError('spk array must have same cols as place_field_centers.')
+        if not spks.shape[1] == pfcs.shape[1]:
+            raise ValueError('spk array must have same cols as pfcs.')
             
-        if not place_field_centers.shape[0] == 2:
+        if not pfcs.shape[0] == 2:
             raise ValueError('Place field centers must have 2 rows.')
         
         # loop over all windows
@@ -185,12 +185,12 @@ class InferredTraj(Traj):
             
             # get position means and covariances, weighted by spk counts
             if np.any(spk_cts):
-                xy = np.average(place_field_centers, axis=1, weights=spk_cts)
+                xy = np.average(pfcs, axis=1, weights=spk_cts)
                 
                 if spk_cts.sum() == 1:
                     cov = np.zeros((2, 2))
                 else:
-                    cov = np.cov(place_field_centers, fweights=spk_cts)
+                    cov = np.cov(pfcs, fweights=spk_cts)
             else:
                 xy = np.nan * np.zeros(2)
                 cov = np.nan * np.zeros((2, 2))
@@ -210,22 +210,22 @@ class InferredTraj(Traj):
         # extract timestamps
         ts = load_time_file(time_file)[0]
         
-        # extract place-field centers and spk counts
+        # extract place field centers and spk counts
         data = load(ntwk_file)
         
-        if ('spks' not in data) or ('place_field_centers' not in data):
+        if ('spks' not in data) or ('pfcs' not in data):
             raise KeyError(
                 'Network activity file must contain spiking activity '
                 'and place field centers.'
             )
         
         # get mask of cells that have place fields
-        pf_mask = np.all(~np.isnan(data['place_field_centers']), axis=0)
+        pf_mask = np.all(~np.isnan(data['pfcs']), axis=0)
         
         # infer positions
         xys, covs = self.infer_positions(
             ts, data['spks'][:, pf_mask], window,
-            data['place_field_centers'][:, pf_mask])
+            data['pfcs'][:, pf_mask])
         
         self.xys = xys
         self.vs = None
