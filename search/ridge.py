@@ -2,6 +2,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 import importlib
 import numpy as np
+import threading
 import time
 import traceback
 
@@ -17,12 +18,35 @@ WAIT_AFTER_ERROR = 5
 
 # SEARCH FUNCTIONS
 
-def launch_searchers(role, obj, n, P, max_iter=10, seed=None):
+def launch_searchers(role, obj, n, P, max_iter=10, seed=None, commit=None):
     """
     Wrapper around search that launches one or more
-    searchers in background and returns process IDs.
+    searcher daemons and returns corresponding threads.
     """
-    pass
+    if commit is None:
+        commit = input(
+            'Please commit relevant files and enter commit id (or "q" to quit): ')
+        if commit.lower() == 'q':
+            raise KeyboardInterrupt('Execution halted by user.')
+     
+    threads = []
+    for ctr in range(n):
+        
+        # define argument-less target function
+        def targ(): 
+            return search(
+                role, obj, P, max_iter=max_iter, seed=seed, commit=commit)
+        
+        # launch searcher daemon
+        thread = threading.Thread(target=targ)
+        thread.daemon = True
+        thread.start()
+        
+        threads.append(thread)
+        
+    print('\n{} searchers launched.'.format(n))
+        
+    return threads
     
     
 def search(
@@ -277,7 +301,7 @@ def activity_and_speed(rsp):
     pass
 
 
-def ntwk_obj(p, seed):
+def ntwk_obj(p, seed, return_rsps=False):
     """
     Run a trial given dict of param values and return dict of results.
     
@@ -300,6 +324,8 @@ def ntwk_obj(p, seed):
         W_A_PC_EC_I
         RATE_EC
     :param seed: random seed, so that trial is reproducible
+    :param return_responses: whether to return list of ntwk responses
+        as additional return variable
         
     :return: dict of measured vals for:
         PROPAGATION
@@ -313,11 +339,15 @@ def ntwk_obj(p, seed):
     activities = []
     speeds = []
     
+    rsps = []
+    
     for n_ctr in range(N_NTWKS):
         
         # make ntwk
         
         # get baseline activity level from EC input alone
+        
+        # sample upstream spks from EC
         
         # compute max forced spks
         
@@ -325,27 +355,33 @@ def ntwk_obj(p, seed):
         spks_forced = ...
         
         # loop over repeats until steady state is reached
+        rsps_ = []
         while True:
             
             # run ntwk with forced spks and vs
             rsp = ntwk.run(...)
             
+            # attach place fields and cell types
+            
+            rsps_.append(rsp)
+        
         # calculate activity and speed from last ntwk response
         activity, speed = activity_and_speed(rsp)
         
-        if activity == 0:
-            propagations.append(0)
-        else:
-            propagations.append(1.)
-            
+        # store results
+        propagations.append(0 if activity == 0 else 1) 
         activities.append(activity)
         speeds.append(speed)
         
-    return {
+        rsps.append(rsps_)
+        
+    rslts = {
         'PROPAGATION': np.mean(propagations),
         'ACTIVITY': np.mean(activities),
         'SPEED': np.mean(speeds)
     }
+    
+    return rslts if not return_responses else rslts, rsps
 
 
 # AUXILIARY FUNCTIONS
@@ -482,7 +518,7 @@ def trial_to_p(trial):
     }
 
 
-def rslt_from_trial(trial):
+def trial_to_rslt(trial):
     """Extract result dict from trial instance."""
     
     return {
@@ -639,7 +675,7 @@ def sample_x_prev(cfg, session, p_to_x):
     
     # get param and rslt dicts
     ps = [trial_to_p(trial) for trial in trials]
-    rslts = [rslt_from_trial(trial) for trial in trials]
+    rslts = [trial_to_rslt(trial) for trial in trials]
     
     p = _sample_x_prev(cfg, ps, rslts)[0]
     
@@ -704,7 +740,7 @@ def sample_x_step(cfg, session, searcher, x_prev, since_jump, p_to_x):
         xs = np.array([p_to_x(p) for p in ps])
         
         # get results
-        rslts = [rslt_from_trial(trial) for trial in trials]
+        rslts = [trial_to_rslt(trial) for trial in trials]
         
         phi_mean = compute_phi_mean(cfg, xs, rslts)
 
