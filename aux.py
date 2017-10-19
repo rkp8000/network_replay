@@ -1,6 +1,11 @@
 import numpy as np
 import os
+from scipy.linalg import toeplitz
 
+cc = np.concatenate
+
+
+# FILE I/O
 
 def save(save_file, obj):
     """
@@ -62,10 +67,58 @@ def load_time_file(time_file):
 
     for key in ('timestamps', 'fs'):
         if key not in data_t:
-            raise KeyError('Item with key "{}" not found in file "{}".'.format(key, time_file))
+            raise KeyError(
+                'Item with key "{}" not found in file '
+                '"{}".'.format(key, time_file))
 
     return data_t['timestamps'], data_t['fs']
 
+
+# GENERAL ARRAY MANIPULATION
+
+def find_segs(x):
+    """
+    Return a list of index pairs corresponding to groups of data where x is True.
+    :param x: 1D array
+    :return: list of index pairs
+    """
+    assert x.dtype == bool
+
+    # find the indices of starts and ends
+    diff = np.diff(np.concatenate([[0], x, [0]]))
+
+    starts = (diff == 1).nonzero()[0]
+    ends = (diff == -1).nonzero()[0]
+
+    return np.array([starts, ends]).T
+
+
+def running_mean(x, wdw):
+    """
+    Return a running average of the same length as x, 
+    using a specified sliding window size. Window size
+    must be an odd number.
+    
+    :param x: 1-D array
+    :param wdw: sliding window size (odd integer)
+    """
+    if not x.ndim == 1:
+        raise ValueError('Arg "x" must be 1-D array.')
+        
+    if not wdw % 2 == 1:
+        raise ValueError('Arg "wdw" must be odd.')
+        
+    # first row and last col
+    r = cc([np.repeat(np.nan, int(np.floor(wdw/2))), x[:int(np.ceil(wdw/2))]])
+    c = cc([x[int(np.floor(wdw/2)):], np.repeat(np.nan, int(np.floor(wdw/2)))])
+    
+    # matrix for averaging
+    mat = np.fliplr(toeplitz(c, r[::-1]))
+    
+    return np.nanmean(mat, 1)
+
+
+# DOWNSAMPLING FUNCTIONS FOR ANIMATIONS
 
 def downsample_spks(spks, num):
     """
@@ -104,7 +157,8 @@ def downsample_spks(spks, num):
 def downsample_ma(xs, num):
     """
     Downsample an array to have num equally spaced samples, where the downsampled
-    value at each time point is a moving average of the values in the corresponding window.
+    value at each time point is a moving average of the values in the 
+    corresponding window.
     
     :param xs: N-D array of values (1st dim is times, higher dims are variables)
     :param num: number of time points in the resampled signal
