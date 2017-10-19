@@ -6,6 +6,7 @@ import threading
 import time
 import traceback
 
+import aux
 from db import make_session, d_models
 
 
@@ -14,6 +15,13 @@ from db import make_session, d_models
 CONFIG_ROOT = 'search.config.ridge'
 MAX_SEED = 10000
 WAIT_AFTER_ERROR = 5
+
+# "FIXED" ANALYSIS PARAMS
+
+PRPGN_T_WINDOW = 0.01  # s
+SGM_FR_MIN = 3  # (STDs [sigmas])
+WAVE_TOL = 0.25
+LOOK_BACK_X = 2
 
 
 # SEARCH FUNCTIONS
@@ -293,13 +301,7 @@ def read_search_error(searcher_id):
         return
     
 
-# RIDGE-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPER
-
-def activity_and_speed(rsp):
-    """Calculate propagation activity level and speed from ntwk response."""
-    # identify start and ending window
-    pass
-
+# RIDGE-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPERS
 
 def ntwk_obj(p, seed, return_rsps=False):
     """
@@ -383,6 +385,139 @@ def ntwk_obj(p, seed, return_rsps=False):
     
     return rslts if not return_responses else rslts, rsps
 
+
+def propagation(rsp, fr_min):
+    """
+    Check if propagation occurred in ntwk response.
+    If so, return start and end times of longest propagation, otherwise
+    return None.
+    
+    :param rsp: ntwk response instance
+    :param fr_min: min per-cell firing rate for pop activity to be 
+        considered above baseline
+    """
+    if not hasattr(rsp, 'pfcs'):
+        raise KeyError(
+            'Ntwk response must include place field '
+            'centers in attribute rsp.pfcs.')
+    if not hasattr(rsp, 'cell_types'):
+        raise KeyError(
+            'Ntwk response must include cell types '
+            'in attribute rsp.cell_types.')
+        
+    # get spks from pc_pop
+    pc_mask = rsp.cell_types == 'PC'
+    spks_pc = rsp.spks[:, pc_mask]
+    
+    # get smoothed PC firing rate, avgd over cells
+    fr_pc = spks_pc.sum(1) / P.DT / spks_pc.shape[1]
+    fr_pc_smooth = aux.running_mean(fr_pc, int(round(PRPGN_T_WDW/P.DT)))
+    
+    # divide into segments where pc fr exceeds bkgd
+    segs = aux.find_segs(fr_pc_smooth > fr_min)
+    
+    if not len(segs):
+        return None
+    
+    # get longest segment and convert to continuous time
+    idx_longest = np.argmax(segs[:, 1] - segs[:, 0])
+    seg_longest = segs[idx_longest]
+    seg = (P.DT * seg_longest[0], P.DT * seg_longest[1])
+    
+    # return seg if activity was still going on at end of run
+    if seg[1] >= (rsp.ts[-1] - PRPGN_T_WDW/2):
+        return seg
+    
+    # check if final cells were active during final moments
+    # activity was above baseline
+    pfcs_pc = rsp.pfcs[:, pc_mask]
+    
+    ## get mask of final cells (x greater than ridge end minus length scale)
+    final_pc_mask = pfcs_pc[0, :] >= rsp.ridge_x[1] - rsp.l_pc
+    n_final = final_pc_mask.sum()
+    
+    ## select final time window as approx time for constant speed
+    ## propagation to cover one length scale
+    speed = (rsp.ridge_x[1] - rsp.ridge_x[0]) / (segs[1] - segs[0])
+    t_start = segs[1] - (rsp.l_pc / speed)
+    t_end = segs[1]
+    t_mask = (t_start <= rsp.ts) & (rsp.ts < t_end)
+    
+    if not t_mask.sum():
+        return None
+    
+    ## compute average per-cell firing rate of final cells during final window
+    fr_final = spks_pc[:, final_pc_mask][t_mask] / P.DT / n_final
+    
+    ## check if firing rate for final cells in final time window above baseline
+    if fr_final > fr_min:
+        return seg
+    else:
+        return None
+    
+    
+def copy_final_spks(rsp, t_start, t_end):
+    """
+    Copy final spks in a ntwk run that exhibited propagation.
+    
+    :param rsp: ntwk response instance
+    :param t_idx: approximate final time idx with activity above baseline
+    """
+    if not hasattr(rsp, 'pfcs'):
+        raise KeyError(
+            'Ntwk response must include place field '
+            'centers in attribute rsp.pfcs.')
+    if not hasattr(rsp, 'cell_types'):
+        raise KeyError(
+            'Ntwk response must include cell types '
+            'in attribute rsp.cell_types.')
+        
+    # fit line to pc spks contained between t_start and t_end
+    pc_mask = rsp.cell_types == 'PC'
+    t_mask = (t_start <= rsp.ts) & (rsp.ts < t_end)
+    
+    spks_pc = rsp.spks[:, pc_mask]
+    
+    # get time and cell idxs
+    idxs_time, idxs_pc = spks_pc[t_mask, :].nonzero()
+    
+    # convert time idxs to time
+    spk_ts = P.DT * idxs_time + t_start
+    
+    # convert cell idxs to x-positions
+    spk_xs = rsp.pfcs[0, :][idxs_pc]
+    
+    # fit line
+    rgr = Lasso()
+    rgr.fit(spk_ts[:, None], spk_xs)
+    
+    # label spks as belonging to wave if within fraction length scales of line
+    dists = np.abs(rgr.predict(spk_ts[:, None]) - spk_xs)
+    in_wave = dists <= WAVE_TOL * rsp.l_pc
+    
+    # let x_2 be x-pos of rightmost spk belonging to wave and x_1 be
+    # x_2 minus a "look-back factor" times the length scale
+    x_2 = spk_xs[in_wave].max()
+    x_1 = x_2 - (LOOK_BACK_X * rsp.l_pc)
+    
+    # let t_2 be final time of wave and t_1 be time of first in-wave
+    # spk from any cell between x_1 and x_2
+    t_2 = t_end
+    t_1 = spk_ts[(x_1 <= spk_xs) & (spk_xs < x_2) & in_wave]
+
+    # make cell and time mask
+    pc_mask_final = (x_1 <= rsp.pfcs[0, :]) & (rsp.pfcs[0, :] < x_2)
+    t_mask_final = (t_1 <= rsp.ts) & (rsp.ts < t_end)
+    
+    # get final spks
+    spks_final = spks_pc[t_mask_final, :][:, pc_mask_final]
+    
+    # reorder cells according to xs
+    xs_final = rsp.pfcs[0, :][pc_mask_final]
+    order = np.argsort(xs_final)
+    
+    return spks_final[:, order]
+    
 
 # AUXILIARY FUNCTIONS
 
