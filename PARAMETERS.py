@@ -58,8 +58,6 @@ T_R = 0.002  # (s)
 
 E_AHP = -0.07  # (V)
 
-U_A_PC = 19  # (spks)
-
 # SYNAPTIC CONDUCTANCE DYNAMICS
 
 E_L_PC = -0.068  # (V)
