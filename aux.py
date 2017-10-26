@@ -76,6 +76,16 @@ def load_time_file(time_file):
 
 # GENERAL ARRAY MANIPULATION
 
+def idx_closest(x, y):
+    """Return the index of the element in y that is closest to x."""
+    
+    if isinstance(x, (int, float)):
+        return np.argmin(np.abs(x - np.array(y)))
+    else:
+        x_, y_ = np.meshgrid(x, y)
+        return np.argmin(np.abs(x_ - y_), 0)
+
+
 def find_segs(x):
     """
     Return a list of index pairs corresponding to groups of data where x is True.
