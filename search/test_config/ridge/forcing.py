@@ -5,7 +5,7 @@ START = {
     'Z_PC': 2, 'L_PC': 1, 'W_A_PC_PC': 2,
     'P_A_INH_PC': 1, 'W_A_INH_PC': 2,
     'P_G_PC_INH': 3, 'W_G_PC_INH': 5,
-    'W_N_PC_EC_I': 7, 'RATE_EC': 9,
+    'RATE_EC': 9,
 }
 
 """
@@ -16,21 +16,21 @@ FORCE = {
                 'Z_PC': 9, 'L_PC': 9, 'W_A_PC_PC': 2,
                 'P_A_INH_PC': 1, 'W_A_INH_PC': 2,
                 'P_G_PC_INH': 3, 'W_G_PC_INH': 5,
-                'W_N_PC_EC_I': 7, 'RATE_EC': 9,
+                'RATE_EC': 9,
             },
             {
                 'RIDGE_H': 1, 'RIDGE_W': 2, 'RHO_PC': 1,
                 'Z_PC': 1, 'L_PC': 1, 'W_A_PC_PC': 2,
                 'P_A_INH_PC': 1, 'W_A_INH_PC': 2,
                 'P_G_PC_INH': 3, 'W_G_PC_INH': 5,
-                'W_N_PC_EC_I': 7, 'RATE_EC': 9,
+                'RATE_EC': 9,
             },
             {
                 'RIDGE_H': 1, 'RIDGE_W': 2, 'RHO_PC': 1,
                 'Z_PC': 9, 'L_PC': 9, 'W_A_PC_PC': 2,
                 'P_A_INH_PC': 1, 'W_A_INH_PC': 2,
                 'P_G_PC_INH': 3, 'W_G_PC_INH': 5,
-                'W_N_PC_EC_I': 7, 'RATE_EC': 9,
+                'RATE_EC': 9,
             },
     ],
     -2: [
@@ -39,21 +39,21 @@ FORCE = {
                 'Z_PC': 9, 'L_PC': 9, 'W_A_PC_PC': 2,
                 'P_A_INH_PC': 1, 'W_A_INH_PC': 2,
                 'P_G_PC_INH': 3, 'W_G_PC_INH': 5,
-                'W_N_PC_EC_I': 7, 'RATE_EC': 9,
+                'RATE_EC': 9,
             },
             {
                 'RIDGE_H': 1, 'RIDGE_W': 2, 'RHO_PC': 1,
                 'Z_PC': 1, 'L_PC': 1, 'W_A_PC_PC': 2,
                 'P_A_INH_PC': 1, 'W_A_INH_PC': 2,
                 'P_G_PC_INH': 3, 'W_G_PC_INH': 5,
-                'W_N_PC_EC_I': 7, 'RATE_EC': 9,
+                'RATE_EC': 9,
             },
             {
                 'RIDGE_H': 1, 'RIDGE_W': 2, 'RHO_PC': 1,
                 'Z_PC': 9, 'L_PC': 9, 'W_A_PC_PC': 2,
                 'P_A_INH_PC': 1, 'W_A_INH_PC': 2,
                 'P_G_PC_INH': 3, 'W_G_PC_INH': 5,
-                'W_N_PC_EC_I': 7, 'RATE_EC': 9,
+                'RATE_EC': 9,
             },
     ],
 }
@@ -81,7 +81,6 @@ P_RANGES = (
     ('P_G_PC_INH', [3]),
     ('W_G_PC_INH', [5]),
 
-    ('W_N_PC_EC_I', [7]),
     ('RATE_EC', [9]),
 )
 

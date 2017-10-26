@@ -10,23 +10,9 @@ import aux
 from db import make_session, d_models
 
 
-# CONFIGURATION
-
-CONFIG_ROOT = 'search.config.ridge'
-MAX_SEED = 10000
-WAIT_AFTER_ERROR = 5
-
-# "FIXED" ANALYSIS PARAMS
-
-PRPGN_T_WINDOW = 0.01  # s
-SGM_FR_MIN = 3  # (STDs [sigmas])
-WAVE_TOL = 0.25
-LOOK_BACK_X = 2
-
-
 # SEARCH FUNCTIONS
 
-def launch_searchers(role, obj, n, P, max_iter=10, seed=None, commit=None):
+def launch_searchers(role, obj, C, n, seed=None, commit=None):
     """
     Wrapper around search that launches one or more
     searcher daemons and returns corresponding threads.
@@ -43,11 +29,10 @@ def launch_searchers(role, obj, n, P, max_iter=10, seed=None, commit=None):
         # define argument-less target function
         def targ(): 
             return search(
-                role, obj, P, max_iter=max_iter, seed=seed, commit=commit)
+                role, obj, global_config, seed=seed, commit=commit)
         
-        # launch searcher daemon
+        # launch searcher thread
         thread = threading.Thread(target=targ)
-        thread.daemon = True
         thread.start()
         
         threads.append(thread)
@@ -58,15 +43,13 @@ def launch_searchers(role, obj, n, P, max_iter=10, seed=None, commit=None):
     
     
 def search(
-        role, obj, P, max_iter=10000, seed=None,
-        config_root=CONFIG_ROOT, commit=None, verbose=False):
+        role, obj, C, seed=None, commit=None, verbose=False):
     """
     Launch instance of searcher exploring potentiated ridge trials.
     
     :param role: searcher role, which should correspond to search config file
     :param obj: objective function
-    :param P: general project parameters module
-    :param max_iter: max number of search iterations before quitting
+    :param C: global configuration module
     :param seed: RNG seed
     :param config_root: module to look for config files in
     :param commit: current git commit id
@@ -81,7 +64,7 @@ def search(
     np.random.seed(seed)
     
     # import initial config
-    cfg = importlib.import_module('.'.join([config_root, role]))
+    cfg = importlib.import_module('.'.join([C.CONFIG_ROOT, role]))
     
     # connect to db
     session = make_session()
@@ -192,7 +175,7 @@ def search(
             
             # convert x_cand to param dict and compute objective function
             p_cand = x_to_p(x_cand)
-            seed_ = np.random.randint(MAX_SEED)
+            seed_ = np.random.randint(C.MAX_SEED)
             
             rslt = obj(p_cand, seed_)
             
@@ -231,7 +214,7 @@ def search(
         session.commit()
         
         if searcher.error is not None:
-            time.sleep(WAIT_AFTER_ERROR)
+            time.sleep(C.WAIT_AFTER_ERROR)
     
     session.close()
             
@@ -312,6 +295,7 @@ def ntwk_obj(p, seed, return_rsps=False):
         RIDGE_W
         
         RHO_PC
+        P_INH
         
         Z_PC
         L_PC
@@ -386,9 +370,9 @@ def ntwk_obj(p, seed, return_rsps=False):
     return rslts if not return_responses else rslts, rsps
 
 
-def propagation(rsp, fr_min):
+def propagation(rsp, fr_min, P, prpgn_t_wdw=PRPGN_T_WDW):
     """
-    Check if propagation occurred in ntwk response.
+    Check if propagation occurred in single ntwk response.
     If so, return start and end times of longest propagation, otherwise
     return None.
     
@@ -411,7 +395,7 @@ def propagation(rsp, fr_min):
     
     # get smoothed PC firing rate, avgd over cells
     fr_pc = spks_pc.sum(1) / P.DT / spks_pc.shape[1]
-    fr_pc_smooth = aux.running_mean(fr_pc, int(round(PRPGN_T_WDW/P.DT)))
+    fr_pc_smooth = aux.running_mean(fr_pc, int(round(prpgn_t_wdw/P.DT)))
     
     # divide into segments where pc fr exceeds bkgd
     segs = aux.find_segs(fr_pc_smooth > fr_min)
@@ -425,7 +409,7 @@ def propagation(rsp, fr_min):
     seg = (P.DT * seg_longest[0], P.DT * seg_longest[1])
     
     # return seg if activity was still going on at end of run
-    if seg[1] >= (rsp.ts[-1] - PRPGN_T_WDW/2):
+    if seg[1] >= (rsp.ts[-1] - prpgn_t_wdw/2):
         return seg
     
     # check if final cells were active during final moments
@@ -456,7 +440,8 @@ def propagation(rsp, fr_min):
         return None
     
     
-def copy_final_spks(rsp, t_start, t_end):
+def copy_final_spks(
+        rsp, t_start, t_end, wave_tol=WAVE_TOL, look_back_x=LOOK_BACK_X):
     """
     Copy final spks in a ntwk run that exhibited propagation.
     
@@ -493,12 +478,12 @@ def copy_final_spks(rsp, t_start, t_end):
     
     # label spks as belonging to wave if within fraction length scales of line
     dists = np.abs(rgr.predict(spk_ts[:, None]) - spk_xs)
-    in_wave = dists <= WAVE_TOL * rsp.l_pc
+    in_wave = dists <= wave_tol * rsp.l_pc
     
     # let x_2 be x-pos of rightmost spk belonging to wave and x_1 be
     # x_2 minus a "look-back factor" times the length scale
     x_2 = spk_xs[in_wave].max()
-    x_1 = x_2 - (LOOK_BACK_X * rsp.l_pc)
+    x_1 = x_2 - (look_back_x * rsp.l_pc)
     
     # let t_2 be final time of wave and t_1 be time of first in-wave
     # spk from any cell between x_1 and x_2
@@ -517,9 +502,42 @@ def copy_final_spks(rsp, t_start, t_end):
     order = np.argsort(xs_final)
     
     return spks_final[:, order]
-    
 
-# AUXILIARY FUNCTIONS
+
+def ridge_h(shape, dens, w_n_ec_pc_vs_dist):
+    """
+    Randomly sample PCs from along a horizontal "ridge", assigning them each
+    a place-field center and an EC->PC cxn weight.
+    
+    :param shape: tuple specifying ridge shape (m)
+    :param dens: number of place fields per m^2
+    :param ws_n_ec_pc_vs_dist: dict with keys:
+        'dists': array of uniformly spaced distances used to sample weights
+        'ws_n_ec_pc': distribution of EC->PC NMDA cxn weights to sample from as
+            fn of dists
+    
+    :return: place field centers, EC->PC cxn weights
+    """
+    # sample number of nrns
+    n_pcs = np.random.poisson(shape[0] * shape[1] * dens)
+    
+    # sample place field positions
+    pfcs = np.random.uniform(
+        (-shape[0]/2, -shape[1]/2), (shape[0]/2, shape[1]/2), (n_pcs, 2)).T
+    
+    # sample EC->PC cxn weights according to dists to centerline
+    dd = np.mean(np.diff(hx['dists']))
+    dist_idxs = np.round(np.abs(pfcs[1]) / dd).astype(int)
+    
+    ws = []
+    for dist_idx in dist_idxs:
+        w_dstr = hx['ws_n_ec_pc'][:, min(dist_idx, len(hx['dists'])-1)]
+        ws.append(np.random.choice(w_dstr))
+    
+    return pfcs, ws
+
+
+# AUXILIARY SEARCH FUNCTIONS
 
 def validate(cfg, ctr):
     """Validate config module, raising exception if invalid."""
@@ -551,8 +569,7 @@ def validate(cfg, ctr):
         
     required = [
         'RIDGE_H', 'RIDGE_W', 'RHO_PC', 'Z_PC', 'L_PC', 'W_A_PC_PC',
-        'P_A_INH_PC', 'W_A_INH_PC', 'P_G_PC_INH', 'W_G_PC_INH',
-        'W_N_PC_EC_I', 'RATE_EC'
+        'P_A_INH_PC', 'W_A_INH_PC', 'P_G_PC_INH', 'W_G_PC_INH', 'RATE_EC'
     ]
     
     keys = [p_range[0] for p_range in cfg.P_RANGES]
@@ -648,7 +665,6 @@ def trial_to_p(trial):
         'P_G_PC_INH': trial.p_g_pc_inh,
         'W_G_PC_INH': trial.w_g_pc_inh,
         
-        'W_N_PC_EC_I': trial.w_n_pc_ec_i,
         'W_RATE_EC': trial.rate_ec,
     }
 
@@ -908,7 +924,6 @@ def save_ridge_trial(session, searcher, seed, p, rslt):
         p_g_pc_inh=p['P_G_PC_INH'],
         w_g_pc_inh=p['W_G_PC_INH'],
         
-        w_n_pc_ec_i=p['W_N_PC_EC_I'],
         rate_ec=p['RATE_EC'],
         
         propagation=rslt['PROPAGATION'],

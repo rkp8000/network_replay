@@ -21,7 +21,7 @@ P_RANGES = [
 
     ('P_G_PC_INH', [1]),
     ('W_G_PC_INH', [2]),
-    ('W_N_PC_EC_I', [5]),
+    
     ('RATE_EC', [9]),
 ]
 
