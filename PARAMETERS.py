@@ -56,7 +56,9 @@ V_RESET_INH = -0.058  # (V)
 
 T_R = 0.002  # (s)
 
-E_AHP = -0.07  # (V)
+E_AHP_PC = -0.07  # (V)
+T_AHP_PC = 0.05  # (s)
+W_AHP_PC = 1  # (s)
 
 # SYNAPTIC CONDUCTANCE DYNAMICS
 
@@ -72,6 +74,7 @@ T_N = 0.08  # (s)
 T_G = 0.005  # (s)
 
 # EC-CA3 PLASTICITY
+
 T_W = 1  # (s)
 T_C = 1.5  # (s)
 C_S = 5
