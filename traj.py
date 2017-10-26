@@ -96,7 +96,7 @@ class RandomTraj(Traj):
         self.vs = vs
 
 
-def upstream_spks_from_traj(ts, xys, pfcs, stds, max_rates):
+def spks_up_from_traj(ts, xys, pfcs, stds, max_rates):
     """
     Generate a set of "upstream" spks from a trajectory sequence
     given the tuning curves of the cells.
