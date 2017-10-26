@@ -46,37 +46,6 @@ def cxns_pcs_rcr(pfs, z_pc, l_pc):
     return cxns
 
 
-def ridge_h(shape, dens, hx):
-    """
-    Randomly sample PCs from along a horizontal "ridge", assigning them each a place-field
-    center and an EC->PC cxn weight.
-    
-    :param shape: tuple specifying ridge shape (m)
-    :param dens: number of place fields per m^2
-    :param hx: dict with keys:
-        'dists': array of uniformly spaced distances used to sample weights
-        'weights': distribution of EC->PC NMDA cxn weights to sample from as fn of dists
-    
-    :return: place field centers, EC->PC cxn weights
-    """
-    # sample number of nrns
-    n_pcs = np.random.poisson(shape[0] * shape[1] * dens)
-    
-    # sample place field positions
-    pfcs = np.random.uniform((-shape[0]/2, -shape[1]/2), (shape[0]/2, shape[1]/2), (n_pcs, 2)).T
-    
-    # sample EC->PC cxn weights according to dists to centerline
-    dd = np.mean(np.diff(hx['dists']))
-    dist_idxs = np.round(np.abs(pfcs[1]) / dd).astype(int)
-    
-    ws = []
-    for dist_idx in dist_idxs:
-        w_dstr = hx['ws_n_ec_pc'][:, min(dist_idx, len(hx['dists'])-1)]
-        ws.append(np.random.choice(w_dstr))
-    
-    return pfcs, ws
-
-
 # INITIAL CONDITIONS
 
 def sample_vs_gs_init(ws_n_pc_ec, v_g_init):
@@ -170,15 +139,18 @@ class LIFNtwk(object):
         self.n_up = list(ws_up.values())[0].shape[1]
 
         if not all([w.shape[0] == self.n for w in ws_up.values()]):
-            raise ValueError('Upstream weight matrices must have one row per neuron.')
+            raise ValueError(
+                'Upstream weight matrices must have one row per neuron.')
 
         if not all([w.shape[1] == self.n_up for w in ws_up.values()]):
-            raise ValueError('All upstream weight matrices must have same number of columns.')
+            raise ValueError(
+                'All upstream weight matrices must have same number of columns.')
 
         # check plasticity parameters
         if plasticity is not None:
             # make sure all parameters are given
-            if set(plasticity) != {'masks', 'w_ec_ca3_maxs', 'T_W', 'T_C', 'C_S', 'BETA_C'}:
+            if set(plasticity) != {
+                    'masks', 'w_ec_ca3_maxs', 'T_W', 'T_C', 'C_S', 'BETA_C'}:
                 raise KeyError(
                     'Argument "plasticity" must contain the correct keys '
                     '(see LIFNtwk documentation).')
@@ -222,7 +194,8 @@ class LIFNtwk(object):
         
         self.plasticity = plasticity
         if plasticity is not None:
-            self.ns_plastic = {syn: w.sum() for syn, w in plasticity['masks'].items()}
+            self.ns_plastic = {
+                syn: w.sum() for syn, w in plasticity['masks'].items()}
          
         if sparse:
             ws_rcr = {syn: csc_matrix(w) for syn, w in ws_rcr.items()}
@@ -237,16 +210,16 @@ class LIFNtwk(object):
         """
         Run a simulation of the network.
 
-        :param spks_up: upstream spiking inputs (rows are time points, cols are neurons)
-            (should be non-negative integers)
+        :param spks_up: upstream spiking inputs (rows are time points, 
+            cols are neurons) (should be non-negative integers)
         :param dt: integration time step for dynamics simulation
         :param vs_init: initial vs
         :param gs_init: initial gs (dict of 1-D arrays)
         :param g_ahp_init: initial g_ahp (1-D array)
-        :param vs_forced: voltages to force at given time points (rows are time points,
-            cols are neurons)
-        :param spks_forced: bool array of spikes to force at given time points (rows are 
-            time points, cols are neurons)
+        :param vs_forced: voltages to force at given time points (rows 
+            are time points, cols are neurons)
+        :param spks_forced: bool array of spikes to force at given time 
+            points (rows are time points, cols are neurons)
 
         :return: network response object
         """
