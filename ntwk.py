@@ -13,24 +13,24 @@ def cxns_pcs_rcr(pfs, z_pc, l_pc):
     Generate a recurrent connectivity matrix with preferential
     attachment between pyramidal cells with nearby place fields.
     
-    :param pfs: (2 x N) array of place fields (cells without place fields
+    :param pfs: (2 x N) array of place field centers (cells without place fields
         should have nans in their place)
     :param z_pc: normalization factor for connections
     :param l_pc: length scale of preferential attachment (m)
     :return: N x N boolean cxn matrix
     """
     # check args
-    if len(pfs) != 2:
+    if len(pfcs) != 2:
         raise ValueError('Arg "pfs" must have two rows.')
     if l_pc <= 0:
         raise ValueError('Arg "l_pc" must be > 0.')
     
     # get number of cells
-    n = pfs.shape[1]
+    n = pfcs.shape[1]
     
     # build distance matrix
-    dx = np.tile(pfs[0][None, :], (n, 1)) - np.tile(pfs[0][:, None], (1, n))
-    dy = np.tile(pfs[1][None, :], (n, 1)) - np.tile(pfs[1][:, None], (1, n))
+    dx = np.tile(pfcs[0][None, :], (n, 1)) - np.tile(pfcs[0][:, None], (1, n))
+    dy = np.tile(pfcs[1][None, :], (n, 1)) - np.tile(pfcs[1][:, None], (1, n))
     d = np.sqrt(dx**2 + dy**2)
     
     # build cxn probability matrix
@@ -48,7 +48,7 @@ def cxns_pcs_rcr(pfs, z_pc, l_pc):
 
 # INITIAL CONDITIONS
 
-def sample_vs_gs_init(ws_n_pc_ec, v_g_init):
+def sample_vs_gs_0(ws_n_pc_ec, v_g_init):
     """
     Return an initial membrane voltage and NMDA conductance for each
     of several PCs, depending on their EC->PC cxn weight.
@@ -205,7 +205,7 @@ class LIFNtwk(object):
         self.ws_up_init = ws_up
 
     def run(
-            self, spks_up, dt, vs_init=None, gs_init=None, g_ahp_init=None,
+            self, spks_up, dt, vs_0=None, gs_0=None, g_ahp_0=None,
             vs_forced=None, spks_forced=None):
         """
         Run a simulation of the network.
@@ -213,9 +213,9 @@ class LIFNtwk(object):
         :param spks_up: upstream spiking inputs (rows are time points, 
             cols are neurons) (should be non-negative integers)
         :param dt: integration time step for dynamics simulation
-        :param vs_init: initial vs
-        :param gs_init: initial gs (dict of 1-D arrays)
-        :param g_ahp_init: initial g_ahp (1-D array)
+        :param vs_0: initial vs
+        :param gs_0: initial gs (dict of 1-D arrays)
+        :param g_ahp_0: initial g_ahp (1-D array)
         :param vs_forced: voltages to force at given time points (rows 
             are time points, cols are neurons)
         :param spks_forced: bool array of spikes to force at given time 
@@ -225,12 +225,12 @@ class LIFNtwk(object):
         """
 
         # validate arguments
-        if vs_init is None:
-            vs_init = self.e_l * np.ones(self.n)
-        if gs_init is None:
-            gs_init = {syn: np.zeros(self.n) for syn in self.syns}
-        if g_ahp_init is None:
-            g_ahp_init = np.zeros(self.n)
+        if vs_0 is None:
+            vs_0 = self.e_l * np.ones(self.n)
+        if gs_0 is None:
+            gs_0 = {syn: np.zeros(self.n) for syn in self.syns}
+        if g_ahp_0 is None:
+            g_ahp_0 = np.zeros(self.n)
             
         if vs_forced is None:
             vs_forced = np.zeros((0, self.n))
@@ -241,17 +241,20 @@ class LIFNtwk(object):
             raise TypeError('"inps_upstream" must be a 2D array.')
 
         if not spks_up.shape[1] == self.n_up:
-            raise ValueError('Upstream input size does not match size of input weight matrix.')
-
-        if not vs_init.shape == (self.n,):
-            raise ValueError('"vs_init" must be 1-D array with one element per neuron.')
-
-        if not all([gs.shape == (self.n,) for gs in gs_init.values()]):
             raise ValueError(
-                'All elements of "gs_init" should be 1-D array with one element per neuron.')
-        if not g_ahp_init.shape == (self.n,):
+                'Upstream input size does not match size of input weight matrix.')
+
+        if not vs_0.shape == (self.n,):
             raise ValueError(
-                '"g_ahp_init" should be 1-D array with one element per neuron.')
+                '"vs_0" must be 1-D array with one element per neuron.')
+
+        if not all([gs.shape == (self.n,) for gs in gs_0.values()]):
+            raise ValueError(
+                'All elements of "gs_0" should be 1-D array with '
+                'one element per neuron.')
+        if not g_ahp_0.shape == (self.n,):
+            raise ValueError(
+                '"g_ahp_0" should be 1-D array with one element per neuron.')
 
         ts = np.arange(len(spks_up)) * dt
 
@@ -263,11 +266,11 @@ class LIFNtwk(object):
         g_ahp = np.nan * np.zeros(sim_shape)
         
         # initialize membrane potentials, conductances, and refractory counters
-        vs[0, :] = vs_init
+        vs[0, :] = vs_0
         
         for syn in self.syns:
-            gs[syn][0, :] = gs_init[syn]
-        g_ahp[0, :] = g_ahp_init
+            gs[syn][0, :] = gs_0[syn]
+        g_ahp[0, :] = g_ahp_0
         
         rp_ctrs = np.zeros(self.n)
         
@@ -331,7 +334,11 @@ class LIFNtwk(object):
             g_ahp[step] = g_ahp[step-1] + dg_ahp
 
             # calculate current input resulting from synaptic conductances
-            is_g = [gs[syn][step] * (self.es_syn[syn] - vs[step-1]) for syn in self.syns]
+            is_g = [
+                gs[syn][step] * (self.es_syn[syn] - vs[step-1])
+                for syn in self.syns
+            ]
+            
             # add in AHP current
             is_g.append(g_ahp[step] * (self.e_ahp - vs[step-1]))
 
@@ -368,7 +375,8 @@ class LIFNtwk(object):
             if self.plasticity is not None:
                 
                 # calculate and store updated spk-ctr
-                cs_next = update_spk_ctr(spks=spks[step], cs_prev=cs[step-1], t_c=t_c, dt=dt)
+                cs_next = update_spk_ctr(
+                    spks=spks[step], cs_prev=cs[step-1], t_c=t_c, dt=dt)
                 cs[step] = cs_next
                 
                 # calculate new weight values for each syn type
