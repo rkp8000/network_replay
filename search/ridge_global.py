@@ -18,9 +18,9 @@ STIM_W_PRE = (0, 2)
 N_TRIALS_W_PRE = 200
 DIST_PRE = np.linspace(0, 0.4, 400)
 
-## V, G_N VS W_N_EC_PC, RATE_EC COMPUTATION
+## V, G_N VS W_N_PC_EC, RATE_EC COMPUTATION
 
-PATH_V_G_N_VS_W_N_EC_PC_RATE_EC = ''
+PATH_V_G_N_VS_W_N_PC_EC_RATE_EC = ''
 
 DUR_V_G_PRE = 21
 MEASURE_START_V_G_PRE = 1
@@ -33,11 +33,16 @@ RATE_EC_PRE = np.linspace(20, 70, 100)
 # OBJECTIVE FUNCTION CONFIG
 
 N_NTWKS = 3
-SMLN_DUR = 0.2
-SGM_FR_MIN = 3  # (STDs [sigmas])
-PRPGN_T_WDW = 0.01  # s
+SMLN_DUR = 0.2  # (s)
+T_STIM = 0.001  # (s)
+
+MIN_BKGD_FR_SGMS = 3  # minimum stds above bkgd fr to be considered nonzero
+PRPGN_T_WDW = 0.01  # (s)
+
 WAVE_TOL = 0.25
 LOOK_BACK_X = 2
+
+N_L_PC_FORCE = 2
 
 
 # SEARCH CONFIG

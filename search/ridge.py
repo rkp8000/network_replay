@@ -8,6 +8,10 @@ import traceback
 
 import aux
 from db import make_session, d_models
+from ntwk import cxns_pcs_rcr, LIFNtwk
+from search import ridge_pre
+
+cc = np.concatenate
 
 
 # SEARCH FUNCTIONS
@@ -186,8 +190,8 @@ def search(
                 p=p_cand,
                 rslt=rslt)
             
-            # move to x_cand if propagation occurred else x_prev
-            if rslt['PROPAGATION']:
+            # move to x_cand if stable else x_prev
+            if rslt['STABILITY']:
                 x = x_cand.copy()
             else:
                 x = x_prev.copy()
@@ -286,38 +290,8 @@ def read_search_error(searcher_id):
 
 # RIDGE-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPERS
 
-def ntwk_obj(p, seed, return_rsps=False):
-    """
-    Run a trial given dict of param values and return dict of results.
-    
-    :param p: dict of params, which must include:
-        RIDGE_H
-        RIDGE_W
-        
-        RHO_PC
-        P_INH
-        
-        Z_PC
-        L_PC
-        W_A_PC_PC
-        
-        P_INH_PC
-        W_A_INH_PC
-        
-        P_PC_INH
-        W_G_PC_INH
-        
-        W_A_PC_EC_I
-        RATE_EC
-    :param seed: random seed, so that trial is reproducible
-    :param return_responses: whether to return list of ntwk responses
-        as additional return variable
-        
-    :return: dict of measured vals for:
-        PROPAGATION
-        ACTIVITY
-        SPEED
-    """
+def ntwk_obj(p, seed, P, C, pre, return_rsps=False):
+
     np.random.seed(seed)
     
     # loop over ntwks
@@ -326,14 +300,81 @@ def ntwk_obj(p, seed, return_rsps=False):
     speeds = []
     
     rsps = []
+    rsps_baseline = []
     
-    for n_ctr in range(N_NTWKS):
+    for n_ctr in range(n_ntwks):
         
         # make ntwk
         
-        # get baseline activity level from EC input alone
+        ## make ridge
+        pfcs, ws_n_pc_ec = ridge_h(
+            (p['RIDGE_W'], p['RIDGE_H']), p['RHO_PC'], pre['w_n_pc_ec_vs_dist'])
+        n_pc = pfcs.shape[1]
+        n_ec = n_pc
         
-        # sample upstream spks from EC
+        ## make INHs
+        n_inh = np.random.poisson(p['P_INH']*n_pc)
+        
+        n = n_pc + n_inh
+        
+        ## make upstream cxns
+        ws_up = {
+            'AMPA': np.zeros((n, n_ec)),
+            'NMDA': cc([np.diag(ws_n_pc_ec), np.zeros((n_inh, n_ec))])
+            'GABA': np.zeros((n, n_ec))}
+        
+        ## make recurrent cxns
+        ws_rcr = {
+            'AMPA': np.zeros((n, n)),
+            'NMDA': np.zeros((n, n)),
+            'GABA': np.zeros((n, n)),
+        }
+        
+        ### pc -> pc cxns
+        ws_rcr['AMPA'][:n_pc, :n_pc] = \
+            p['W_A_PC_PC'] * cxns_pcs_rcr(pfcs, p['Z_PC'], p['L_PC'])
+        
+        ### pc -> inh cxns
+        ws_rcr['AMPA'][-n_inh:, :n_pc] = \
+            p['W_A_INH_PC'] * np.random.binomial(1, p['P_A_INH_PC'], (n_inh, n_pc))
+        
+        ### inh -> pc cxns
+        ws_rcr['GABA'][:n_pc, -n_inh:] = \
+            p['W_G_PC_INH'] * np.random.binomial(1, p['P_G_PC_INH'], (n_pc, n_inh))
+        
+        ## instantiate ntwk
+        ntwk = LIFNtwk(
+            t_m=cc([np.repeat(P.T_M_PC, n_pc), np.repeat(P.T_M_INH, n_inh)]),
+            e_l=cc([np.repeat(P.E_L_PC, n_pc), np.repeat(P.E_L_INH, n_inh)]),
+            v_th=cc([np.repeat(P.V_TH_PC, n_pc), np.repeat(P.V_TH_INH, n_inh)]),
+            v_reset=cc([
+                np.repeat(P.V_RESET_PC, n_pc), np.repeat(P.V_RESET_INH, n_inh)]),
+            t_r=P.T_R, e_ahp=P.E_AHP_PC, t_ahp=P.T_AHP_PC,
+            w_ahp=cc([np.repeat(P.W_AHP_PC, n_pc), np.repeat(0, n_inh)]),
+            es_syn={'AMPA': P.E_A, 'NMDA': P.E_N, 'GABA': P.E_G},
+            ts_syn={'AMPA': P.T_A, 'NMDA': P.T_N, 'GABA': P.T_G},
+            ws_up=ws_up, ws_rcr=ws_rcr,
+            plasticity=None)
+        
+        # get initial vs and g_ns
+        vs_0_pc, gs_n_0_pc = ridge_pre.sample_v_g(
+            ws_n_pc_ec, p['RATE_EC'], pre['v_g_n_vs_w_n_pc_ec'])
+        g_0s = {
+            'AMPA': np.zeros(n), 'NMDA': g_n_0s, }
+        
+        # get background activity level from EC input alone
+        
+        ## sample upstream spks from EC
+        ts = np.arange(0, SIM_DUR, P.DT)
+        
+        spks_up = np.random.poisson(p['RATE_EC'] * P.DT, (len(ts), n_ec))
+        
+        ## run ntwk
+        rsp_bkgd = ntwk.run(spks_up, P.DT, vs_init=v_0s, gs_init=g_0s)
+        rsps_bkgd.append(rsp_bkgd)
+        
+        ## calculate background activity level
+        rate_bkgd = np.mean(rsp_bkgd.spks / P.DT)
         
         # compute max forced spks
         
@@ -367,18 +408,17 @@ def ntwk_obj(p, seed, return_rsps=False):
         'SPEED': np.mean(speeds)
     }
     
-    return rslts if not return_responses else rslts, rsps
+    return rslts if not return_responses else rslts, rsps_bkgd, rsps
 
 
-def propagation(rsp, fr_min, P, prpgn_t_wdw=PRPGN_T_WDW):
+def propagation(rsp, fr_nz, P, C):
     """
     Check if propagation occurred in single ntwk response.
     If so, return start and end times of longest propagation, otherwise
     return None.
     
     :param rsp: ntwk response instance
-    :param fr_min: min per-cell firing rate for pop activity to be 
-        considered above baseline
+    :param fr_nz: min per-cell firing rate for pop activity to be nonzero
     """
     if not hasattr(rsp, 'pfcs'):
         raise KeyError(
@@ -395,10 +435,10 @@ def propagation(rsp, fr_min, P, prpgn_t_wdw=PRPGN_T_WDW):
     
     # get smoothed PC firing rate, avgd over cells
     fr_pc = spks_pc.sum(1) / P.DT / spks_pc.shape[1]
-    fr_pc_smooth = aux.running_mean(fr_pc, int(round(prpgn_t_wdw/P.DT)))
+    fr_pc_smooth = aux.running_mean(fr_pc, int(round(C.PRPGN_T_WDW/P.DT)))
     
     # divide into segments where pc fr exceeds bkgd
-    segs = aux.find_segs(fr_pc_smooth > fr_min)
+    segs = aux.find_segs(fr_pc_smooth > fr_nz)
     
     if not len(segs):
         return None
@@ -434,14 +474,44 @@ def propagation(rsp, fr_min, P, prpgn_t_wdw=PRPGN_T_WDW):
     fr_final = spks_pc[:, final_pc_mask][t_mask] / P.DT / n_final
     
     ## check if firing rate for final cells in final time window above baseline
-    if fr_final > fr_min:
+    if fr_final > fr_nz:
         return seg
     else:
         return None
     
     
-def copy_final_spks(
-        rsp, t_start, t_end, wave_tol=WAVE_TOL, look_back_x=LOOK_BACK_X):
+def decay(rsp, t_start, t_end, C):
+    """
+    Return whether response decays from start to end of activity propagation
+    from t_start to t_end.
+    
+    :param rsp: ntwk response object
+    :param t_start: start of propagation in response
+    :param t_end: end of propagation in response
+    :param C: configuration module
+    """
+    # convert relative decay check times to absolute
+    dur = t_end - t_start
+    
+    start_0 = t_start + C.DECAY_CHECK[0][0] * dur
+    end_0 = t_start + C.DECAY_CHECK[0][1] * dur
+    
+    start_1 = t_start + C.DECAY_CHECK[1][0] * dur
+    end_1 = t_start + C.DECAY_CHECK[1][1] * dur
+    
+    # get mean firing rate over first window
+    mask_0 = (start_0 <= rsp.ts) & (rsp.ts < end_0)
+    fr_0 = np.mean(rsp.spks[mask_0] / P.DT)
+    
+    # get mean firing rate over second window
+    mask_1 = (start_1 <= rsp.ts) & (rsp.ts < end_1)
+    fr_1 = np.mean(rsp.spks[mask_1] / P.DT)
+    
+    # check whether fr_1 is sufficiently below decay tolerance
+    return fr_1 < (C.DECAY_MIN * fr_0)
+    
+    
+def copy_final_spks(rsp, t_start, t_end, C):
     """
     Copy final spks in a ntwk run that exhibited propagation.
     
@@ -478,12 +548,12 @@ def copy_final_spks(
     
     # label spks as belonging to wave if within fraction length scales of line
     dists = np.abs(rgr.predict(spk_ts[:, None]) - spk_xs)
-    in_wave = dists <= wave_tol * rsp.l_pc
+    in_wave = dists <= C.WAVE_TOL * rsp.l_pc
     
     # let x_2 be x-pos of rightmost spk belonging to wave and x_1 be
     # x_2 minus a "look-back factor" times the length scale
     x_2 = spk_xs[in_wave].max()
-    x_1 = x_2 - (look_back_x * rsp.l_pc)
+    x_1 = x_2 - (C.LOOK_BACK_X * rsp.l_pc)
     
     # let t_2 be final time of wave and t_1 be time of first in-wave
     # spk from any cell between x_1 and x_2
@@ -523,18 +593,14 @@ def ridge_h(shape, dens, w_n_ec_pc_vs_dist):
     
     # sample place field positions
     pfcs = np.random.uniform(
-        (-shape[0]/2, -shape[1]/2), (shape[0]/2, shape[1]/2), (n_pcs, 2)).T
+        (-shape[0]/2, -shape[1]/2), (shape[0]/2, shape[1]/2),
+        (n_pcs, 2)).T
     
-    # sample EC->PC cxn weights according to dists to centerline
-    dd = np.mean(np.diff(hx['dists']))
-    dist_idxs = np.round(np.abs(pfcs[1]) / dd).astype(int)
+    # compute dists to centerline
+    dists = np.abs(pfcs[1, :])
     
-    ws = []
-    for dist_idx in dist_idxs:
-        w_dstr = hx['ws_n_ec_pc'][:, min(dist_idx, len(hx['dists'])-1)]
-        ws.append(np.random.choice(w_dstr))
-    
-    return pfcs, ws
+    # sample and return EC->PC NMDA weights
+    return pfcs, ridge_pre.sample_w_n_ec_pc(dists, w_n_ec_pc_vs_dist)
 
 
 # AUXILIARY SEARCH FUNCTIONS
@@ -673,7 +739,7 @@ def trial_to_rslt(trial):
     """Extract result dict from trial instance."""
     
     return {
-        'PROPAGATION': trial.propagation,
+        'STABILITY': trial.stability,
         'ACTIVITY': trial.activity,
         'SPEED': trial.speed,
     }
@@ -796,7 +862,7 @@ def _sample_x_prev(cfg, ps, rslts):
     
     # convert rslts to usable arrays
     temp = [
-        (rslt['PROPAGATION'], rslt['ACTIVITY'], rslt['SPEED'])
+        (rslt['STABILITY'], rslt['ACTIVITY'], rslt['SPEED'])
         for rslt in rslts
     ]
     y, k, s = np.array(temp).T
@@ -838,7 +904,7 @@ def compute_phi_mean(cfg, xs, rslts):
     
     # convert rslts to usable arrays
     temp = [
-        (rslt['PROPAGATION'], rslt['ACTIVITY'], rslt['SPEED'])
+        (rslt['STABILITY'], rslt['ACTIVITY'], rslt['SPEED'])
         for rslt in rslts
     ]
     y, k, s = np.array(temp).T
@@ -926,7 +992,7 @@ def save_ridge_trial(session, searcher, seed, p, rslt):
         
         rate_ec=p['RATE_EC'],
         
-        propagation=rslt['PROPAGATION'],
+        stability=rslt['STABILITY'],
         activity=rslt['ACTIVITY'],
         speed=rslt['SPEED'],
     )
