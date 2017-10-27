@@ -11,6 +11,8 @@ from ntwk import LIFNtwk
 from plot import set_font_size
 from traj import Traj, spks_up_from_traj
 
+cc = np.concatenate
+
 
 def w_n_ec_pc_vs_dist(P, C):
     """
@@ -29,7 +31,7 @@ def w_n_ec_pc_vs_dist(P, C):
     ts = np.arange(0, C.DUR_W_PRE, P.DT)
     xys = np.zeros((len(ts), 2))
     traj = Traj(ts=ts, xys=xys)
-    
+       
     # build ntwk
     ws_up = {
         'AMPA': cc([P.W_A_PC_PL * np.eye(n), np.zeros((n, n))], axis=1),
@@ -46,7 +48,7 @@ def w_n_ec_pc_vs_dist(P, C):
     ntwk = LIFNtwk(
         t_m=P.T_M_PC, e_l=P.E_L_PC, v_th=P.V_TH_PC,
         v_reset=P.V_RESET_PC, t_r=P.T_R,
-        e_ahp=P.E_AHP, t_ahp=np.inf, w_ahp=0,
+        e_ahp=P.E_AHP_PC, t_ahp=np.inf, w_ahp=0,
         es_syn={'AMPA': P.E_A, 'NMDA': P.E_N},
         ts_syn={'AMPA': P.T_A, 'NMDA': P.T_N},
         ws_up=ws_up, ws_rcr=ws_rcr,
@@ -76,15 +78,21 @@ def w_n_ec_pc_vs_dist(P, C):
     # save results
     save_path = aux.save(
         C.PATH_W_N_EC_PC_VS_DIST,
-        {'dist': C.DISTS_PRE, 'w_n_ec_pc': ws_n_pc_ec})
+        {'dist': C.DIST_PRE, 'w_n_ec_pc': ws_n_pc_ec})
     
     print('w_n_pc_ec vs dists file saved at "{}".'.format(save_path))
     
     # plot results
     fig, ax = plt.subplots(1, 1, figsize=(15, 4), tight_layout=True)
     
-    for d_ctr, d in enumerate(C.DISTS_PRE):
-        ax.scatter(d*np.ones(n), ws_n_pc_ec[d_ctr], s=5, c='k', lw=0)
+    for ctr in range(C.N_TRIALS_W_PRE):
+        ax.scatter(C.DIST_PRE, ws_n_pc_ec[ctr], s=5, c='k', lw=0)
+        
+    y_min = ws_n_pc_ec.min()
+    y_max = ws_n_pc_ec.max()
+    y_range = y_max - y_min
+    
+    ax.set_ylim(y_min - .1*y_range, y_max + .1*y_range)
         
     ax.set_xlabel('pfc dist from rat\'s location (m)')
     ax.set_ylabel('w_n_ec_pc final')
@@ -94,7 +102,7 @@ def w_n_ec_pc_vs_dist(P, C):
     return fig
         
 
-def v_g_n_vs_w_n_ec_pc_rate_ec(P, C):
+def v_g_n_vs_w_n_ec_pc_rate_ec(P, C, cmap='hot'):
     """
     Compute and save steady-state v and g_n distributions
     as function of w_n_ec_pc and rate_ec.
@@ -103,7 +111,7 @@ def v_g_n_vs_w_n_ec_pc_rate_ec(P, C):
     n = len(C.W_N_EC_PC_PRE)
     
     # build PC ntwk
-    ws_up = {'NMDA': np.diag(ws_n_pc_ec)}
+    ws_up = {'NMDA': np.diag(C.W_N_EC_PC_PRE)}
     ws_rcr = {'NMDA': np.zeros((n, n))}
     
     ntwk = LIFNtwk(
@@ -114,37 +122,39 @@ def v_g_n_vs_w_n_ec_pc_rate_ec(P, C):
         ws_up=ws_up, ws_rcr=ws_rcr)
     
     # loop over EC rates
-    ts = np.arange(0, C.DUR_VG_PRE, P.DT)
+    ts = np.arange(0, C.DUR_V_G_PRE, P.DT)
     
     shape = (
         len(C.W_N_EC_PC_PRE),
         len(C.RATE_EC_PRE),
-        len(C.N_TIMEPOINTS_V_G_PRE)
+        C.N_TIMEPOINTS_V_G_PRE,
     )
     
     vs = np.nan * np.zeros(shape)
     gs_n = np.nan * np.zeros(shape)
     
-    for ctr_r, rate_ec in enumerate(C.RATES_EC_PRE):
+    for ctr_r, rate_ec in enumerate(C.RATE_EC_PRE):
         
         # build upstream spks and run ntwk
-        spks_up = np.random.poisson(P.DT*rate_ec, (len(ts), n))
+        spks_up = np.random.poisson(P.DT * rate_ec, (len(ts), n))
         rsp = ntwk.run(spks_up, P.DT)
         
         # loop over neurons i.e. ws_n_pc_ec
         for ctr_w in range(n):
             
             # pick random timepoints to sample vs and gs at
-            tps_sample = np.random.choice(
-                np.arange(int(C.MEASURE_START_V_G/P.DT), int(DUR/P.DT)), 
-                C.N_TIMEPOINTS_V_G_PRE)
+            start = int(C.MEASURE_START_V_G_PRE / P.DT)
+            end = int(C.DUR_V_G_PRE / P.DT) 
             
-            vs[ctr_r, ctr_w, :] = rsp.vs[tps_sample, ctr_w]
-            gs_n[ctr_r, ctr_w, :] = rsp.gs['NMDA'][tps_sample, ctr_w]
+            tps_sample = np.random.choice(
+                np.arange(start, end), C.N_TIMEPOINTS_V_G_PRE)
+            
+            vs[ctr_w, ctr_r, :] = rsp.vs[tps_sample, ctr_w]
+            gs_n[ctr_w, ctr_r, :] = rsp.gs['NMDA'][tps_sample, ctr_w]
             
     # save results
     save_path = aux.save(
-        C.PATH_V_G_N_VS_W_N_EC_PC_RATE_EC,
+        C.PATH_V_G_N_VS_W_N_PC_EC_RATE_EC,
         {
             'w_n_ec_pc': C.W_N_EC_PC_PRE,
             'rate_ec': C.RATE_EC_PRE,
@@ -160,35 +170,42 @@ def v_g_n_vs_w_n_ec_pc_rate_ec(P, C):
     v_stds = vs.std(-1)
     
     g_n_means = gs_n.mean(-1)
-    g_n_stds = gs_n_std(-1)
+    g_n_stds = gs_n.std(-1)
     
     fig, axs = plt.subplots(1, 4, figsize=(15, 4), tight_layout=True)
     
     # mean v vs w_n_pc_ec, rate_ec
     axs[0].scatter(
         w_.flatten(), rate_.flatten(), c=v_means.flatten(),
-        s=5, lw=0, v_min=v_means.min(), v_max=v_means.max())
+        s=10, lw=0, vmin=v_means.min(), vmax=v_means.max(), cmap=cmap)
     axs[0].set_title('Mean PC voltage')
     
     # std v vs w_n_pc_ec, rate_ec
     axs[1].scatter(
         w_.flatten(), rate_.flatten(), c=v_stds.flatten(),
-        s=5, lw=0, v_min=v_stds.min(), v_max=v_stds.max())
+        s=10, lw=0, vmin=v_stds.min(), vmax=v_stds.max(), cmap=cmap)
     axs[1].set_title('Std of PC voltage')
     
     # mean g_n vs w_n_pc_ec, rate_ec
     axs[2].scatter(
         w_.flatten(), rate_.flatten(), c=g_n_means.flatten(),
-        s=5, lw=0, v_min=g_n_means.min(), v_max=g_n_means.max())
+        s=10, lw=0, vmin=g_n_means.min(), vmax=g_n_means.max(), cmap=cmap)
     axs[2].set_title('Mean EC->PC G_N')
     
     # std g_n vs w_n_pc_ec, rate_ec
     axs[3].scatter(
         w_.flatten(), rate_.flatten(), c=g_n_stds.flatten(),
-        s=5, lw=0, v_min=g_n_stds.min(), v_max=g_n_stds.max())
+        s=10, lw=0, vmin=g_n_stds.min(), vmax=g_n_stds.max(), cmap=cmap)
     axs[3].set_title('Std of EC->PC G_N')
     
+    w_min = w_.min()
+    w_max = w_.max()
+    w_range = w_max - w_min
+    
     for ax in axs:
+        ax.set_xlim(w_min - .1*w_range, w_max + .1*w_range)
+        
+        ax.set_xticks([w_min, w_max])
         ax.set_xlabel('w_n_ec_pc')
         ax.set_ylabel('rate_ec (Hz)')
         

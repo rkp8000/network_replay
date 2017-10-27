@@ -290,12 +290,12 @@ def read_search_error(searcher_id):
 
 # RIDGE-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPERS
 
-def ntwk_obj(p, seed, P, C, pre, return_rsps=False):
+def ntwk_obj(p, seed, P, C, pre, test=False):
 
     np.random.seed(seed)
     
     # loop over ntwks
-    propagations = []
+    stabilities = []
     activities = []
     speeds = []
     
@@ -320,7 +320,7 @@ def ntwk_obj(p, seed, P, C, pre, return_rsps=False):
         ## make upstream cxns
         ws_up = {
             'AMPA': np.zeros((n, n_ec)),
-            'NMDA': cc([np.diag(ws_n_pc_ec), np.zeros((n_inh, n_ec))])
+            'NMDA': cc([np.diag(ws_n_pc_ec), np.zeros((n_inh, n_ec))]),
             'GABA': np.zeros((n, n_ec))}
         
         ## make recurrent cxns
@@ -331,16 +331,16 @@ def ntwk_obj(p, seed, P, C, pre, return_rsps=False):
         }
         
         ### pc -> pc cxns
-        ws_rcr['AMPA'][:n_pc, :n_pc] = \
-            p['W_A_PC_PC'] * cxns_pcs_rcr(pfcs, p['Z_PC'], p['L_PC'])
+        ws_rcr['AMPA'][:n_pc, :n_pc] = p['W_A_PC_PC'] * \
+            cxns_pcs_rcr(pfcs, p['Z_PC'], p['L_PC'])
         
         ### pc -> inh cxns
-        ws_rcr['AMPA'][-n_inh:, :n_pc] = \
-            p['W_A_INH_PC'] * np.random.binomial(1, p['P_A_INH_PC'], (n_inh, n_pc))
+        ws_rcr['AMPA'][-n_inh:, :n_pc] = p['W_A_INH_PC'] * \
+            np.random.binomial(1, p['P_A_INH_PC'], (n_inh, n_pc))
         
         ### inh -> pc cxns
-        ws_rcr['GABA'][:n_pc, -n_inh:] = \
-            p['W_G_PC_INH'] * np.random.binomial(1, p['P_G_PC_INH'], (n_pc, n_inh))
+        ws_rcr['GABA'][:n_pc, -n_inh:] = p['W_G_PC_INH'] * \
+            np.random.binomial(1, p['P_G_PC_INH'], (n_pc, n_inh))
         
         ## instantiate ntwk
         ntwk = LIFNtwk(
@@ -356,59 +356,31 @@ def ntwk_obj(p, seed, P, C, pre, return_rsps=False):
             ws_up=ws_up, ws_rcr=ws_rcr,
             plasticity=None)
         
-        # get initial vs and g_ns
-        vs_0_pc, gs_n_0_pc = ridge_pre.sample_v_g(
-            ws_n_pc_ec, p['RATE_EC'], pre['v_g_n_vs_w_n_pc_ec'])
-        g_0s = {
-            'AMPA': np.zeros(n), 'NMDA': g_n_0s, }
+        ntwk.n_pc = n_pc
+        ntwk.n_ec = n_ec
+        ntwk.n_inh = n_inh
         
-        # get background activity level from EC input alone
+        ntwk.pfcs = pfcs
+        ntwk.cell_types = cc([np.repeat('PC', n_pc), np.repeat('INH'), n_inh])
         
-        ## sample upstream spks from EC
-        ts = np.arange(0, SIM_DUR, P.DT)
-        
-        spks_up = np.random.poisson(p['RATE_EC'] * P.DT, (len(ts), n_ec))
-        
-        ## run ntwk
-        rsp_bkgd = ntwk.run(spks_up, P.DT, vs_init=v_0s, gs_init=g_0s)
-        rsps_bkgd.append(rsp_bkgd)
-        
-        ## calculate background activity level
-        rate_bkgd = np.mean(rsp_bkgd.spks / P.DT)
-        
-        # compute max forced spks
-        
-        vs_forced = ...
-        spks_forced = ...
-        
-        # loop over repeats until steady state is reached
-        rsps_ = []
-        while True:
-            
-            # run ntwk with forced spks and vs
-            rsp = ntwk.run(...)
-            
-            # attach place fields and cell types
-            
-            rsps_.append(rsp)
-        
-        # calculate activity and speed from last ntwk response
-        activity, speed = activity_and_speed(rsp)
+        # stabilize ntwk
+        rsps_, stability, activity, speed = stabilize(ntwk, pre, p, P, C)
         
         # store results
-        propagations.append(0 if activity == 0 else 1) 
+        stabilities.append(stability)
         activities.append(activity)
         speeds.append(speed)
         
-        rsps.append(rsps_)
+        if test:
+            rsps.append(rsps_)
         
     rslts = {
-        'PROPAGATION': np.mean(propagations),
+        'STABILITY': np.mean(stabilities),
         'ACTIVITY': np.mean(activities),
         'SPEED': np.mean(speeds)
     }
     
-    return rslts if not return_responses else rslts, rsps_bkgd, rsps
+    return rslts if not test else rslts, rsps_bkgd, rsps
 
 
 def stabilize(ntwk, pre, p, P, C):
@@ -477,7 +449,7 @@ def stabilize(ntwk, pre, p, P, C):
         rsps.append(rsp)
         
         # compute time window of longest propagation
-        wdw_prop = propagation(rsp, fr_nz, P, C)
+        wdw_prop = check_propagation(rsp, fr_nz, P, C)
 
         # break if no propagation
         if wdw_prop is None:
@@ -485,7 +457,7 @@ def stabilize(ntwk, pre, p, P, C):
             break
             
         # check for activity decay
-        if not decay_check(rsp, *wdw_prop, C):
+        if not check_decay(rsp, *wdw_prop, C):
             stability = 1
             break
             
@@ -509,10 +481,20 @@ def stabilize(ntwk, pre, p, P, C):
     else:
         stability = 1
         
-    return rsps, stability
+    if not stability:
+        activity = 0
+        speed = 0
+    else:
+        # get activity and speed of final ntwk response
+        activity = get_activity_level(rsp, p, wdw_prop, C)
+        speed = get_speed(...)
+    
+    
+    
+    return rsps, stability, activity, speed
 
 
-def propagation(rsp, fr_nz, P, C):
+def check_propagation(rsp, fr_nz, P, C):
     """
     Check if propagation occurred in single ntwk response.
     If so, return start and end times of longest propagation, otherwise
@@ -581,24 +563,22 @@ def propagation(rsp, fr_nz, P, C):
         return None
     
     
-def decay_check(rsp, t_start, t_end, C):
+def check_decay(rsp, wdw, C):
     """
     Return whether response decays from start to end of activity propagation
     from t_start to t_end.
     
     :param rsp: ntwk response object
-    :param t_start: start of propagation in response
-    :param t_end: end of propagation in response
-    :param C: configuration module
+    :param wdw: (start, end) of propagation epoch
     """
     # convert relative decay check times to absolute
-    dur = t_end - t_start
+    dur = wdw[1] - wdw[0]
     
-    start_0 = t_start + C.DECAY_CHECK[0][0] * dur
-    end_0 = t_start + C.DECAY_CHECK[0][1] * dur
+    start_0 = wdw[0] + C.DECAY_CHECK[0][0] * dur
+    end_0 = wdw[0] + C.DECAY_CHECK[0][1] * dur
     
-    start_1 = t_start + C.DECAY_CHECK[1][0] * dur
-    end_1 = t_start + C.DECAY_CHECK[1][1] * dur
+    start_1 = wdw[0] + C.DECAY_CHECK[1][0] * dur
+    end_1 = wdw[0] + C.DECAY_CHECK[1][1] * dur
     
     # get mean firing rate over first window
     mask_0 = (start_0 <= rsp.ts) & (rsp.ts < end_0)
@@ -610,14 +590,67 @@ def decay_check(rsp, t_start, t_end, C):
     
     # check whether fr_1 is sufficiently below decay tolerance
     return fr_1 < (C.DECAY_MIN * fr_0)
+
+
+def get_activity_level(rsp, p, wdw, C):
+    """
+    Get ratio of time-averaged firing rate during propagation period to
+    PC density (with final units of m^2/s).
+    
+    :param p: param dict for current trial
+    :param wdw: (start, end) of propagation epoch
+    """
+    # convert activity measurement times to absolute
+    dur = wdw[1] - wdw[0]
+    
+    start = wdw[0] + C.ACTIVITY_READ[0] * dur
+    end = wdw[0] + C.ACTIVITY_READ[1] * dur
+    
+    # get total firing rate in window
+    mask = (start <= rsp.ts) * (rsp.ts < end)
+    fr_pop = np.sum(rsp.spks[mask] / P.DT)
+    
+    # divide population firing rate by density
+    return fr_pop / p['RHO_PC']
+
+
+def get_speed(rsp, wdw, C):
+    """
+    Get linear speed of propagating ntwk response.
+    
+    :param wdw: (start, end) of propagation epoch
+    """
+    pc_mask = rsp.cell_types == 'PC'
+    
+    # convert speed measurement times to absolute
+    dur = wdw[1] - wdw[0]
+    
+    start = wdw[0] + C.SPEED_READ[0] * dur
+    end = wdw[0] + C.SPEED_READ[1] * dur
+    
+    t_mask = (start <= rsp.ts) & (rsp.ts < end)
+    
+    # get times and x-positions of all spks
+    spk_t_idxs, spk_cells = rsp.spks[t_mask, pc_mask].nonzero()
+    
+    spk_ts = rsp.ts[mask][spk_t_idxs]
+    spk_xs = rsp.pfcs[0, pc_mask][spk_cells]
+    
+    # fit line to get approximate speed
+    rgr = Lasso()
+    rgr.fit(spk_ts[:, None], spk_xs)
+    
+    speed = rgr.coef_[0]
+    
+    return speed
     
     
-def copy_final(rsp, t_start, t_end, C):
+def copy_final(rsp, wdw, C):
     """
     Copy final vs & spks in a ntwk run that exhibited propagation.
     
     :param rsp: ntwk response instance
-    :param t_idx: approximate final time idx with activity above baseline
+    :param wdw: start and end of propagation epoch
     """
     if not hasattr(rsp, 'pfcs'):
         raise KeyError(
@@ -630,7 +663,7 @@ def copy_final(rsp, t_start, t_end, C):
         
     # fit line to pc spks contained between t_start and t_end
     pc_mask = rsp.cell_types == 'PC'
-    t_mask = (t_start <= rsp.ts) & (rsp.ts < t_end)
+    t_mask = (wdw[0] <= rsp.ts) & (rsp.ts < wdw[1])
     
     vs_pc = rsp.vs[:, pc_mask]
     spks_pc = rsp.spks[:, pc_mask]
@@ -639,7 +672,7 @@ def copy_final(rsp, t_start, t_end, C):
     idxs_time, idxs_pc = spks_pc[t_mask, :].nonzero()
     
     # convert time idxs to time
-    spk_ts = P.DT * idxs_time + t_start
+    spk_ts = P.DT * idxs_time + wdw[0]
     
     # convert cell idxs to x-positions
     spk_xs = rsp.pfcs[0, :][idxs_pc]

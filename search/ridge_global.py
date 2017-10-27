@@ -34,6 +34,8 @@ RATE_EC_PRE = np.linspace(20, 70, 100)
 
 N_NTWKS = 3
 SMLN_DUR = 0.2  # (s)
+MAX_RUNS_STABILITY = 10
+
 T_STIM = 0.001  # (s)
 
 MIN_BKGD_FR_SGMS = 3  # minimum stds above bkgd fr to be considered nonzero
@@ -43,6 +45,12 @@ WAVE_TOL = 0.25
 LOOK_BACK_X = 2
 
 N_L_PC_FORCE = 2
+
+DECAY_CHECK = [(0, .2), (.7, .9)]
+DECAY_MIN = 0.95
+
+ACTIVITY_READ = (.1, .9)
+SPEED_READ = (.1, .9)
 
 
 # SEARCH CONFIG
