@@ -411,6 +411,107 @@ def ntwk_obj(p, seed, P, C, pre, return_rsps=False):
     return rslts if not return_responses else rslts, rsps_bkgd, rsps
 
 
+def stabilize(ntwk, pre, p, P, C):
+    """
+    Run ntwk cyclically until activity from beginning to end of sim
+    does not change.
+    """
+    
+    # sample initial vs and g_ns
+    vs_0_pc, gs_n_0_pc = ridge_pre.sample_v_g(
+        ws_n_pc_ec, p['RATE_EC'], pre['v_g_n_vs_w_n_pc_ec'])
+    
+    vs_0 = cc([vs_0_pc, P.E_L_INH * np.ones(ntwk.n_inh)])
+    
+    gs_0 = {
+        'AMPA': np.zeros(ntwk.n),
+        'NMDA': cc([gs_n_0, np.zeros(ntwk.n_inh)]),
+        'GABA': np.zeros(ntwk.n)
+    }
+
+    # get background activity level from EC input alone
+
+    ## sample upstream spks from EC
+    ts = np.arange(0, C.SMLN_DUR, P.DT)
+
+    spks_up = np.random.poisson(p['RATE_EC'] * P.DT, (len(ts), ntwk.n_ec))
+
+    ## run ntwk
+    rsp_bkgd = ntwk.run(spks_up, P.DT, vs_0=v_0s, gs_0=g_0s)
+    rsps_bkgd.append(rsp_bkgd)
+
+    ## calculate background rate mean and std
+    rate_bkgd = rsp_bkgd.spks / P.DT
+    rate_bkgd_mean = np.mean(rate_bkgd)
+    rate_bgkd_std = np.std(rate_bkgd)
+    
+    fr_nz = rate_bkgd_mean + (C.MIN_BKGD_FR_SGMS * rate_bkgd_std)
+
+    # estimate max forced spks
+    xs = ntwk.pfcs[0, :]
+    x_max = -(p['RIDGE_W'] / 2) + (C.N_L_PC_FORCE * p['L_PC'])
+    mask_force = xs < x_max
+    
+    idx_stim = int(C.T_STIM/P.DT)
+    spks_forced = np.zeros((idx_stim + 1, ntwk.n))
+    spks_forced[idx_stim, mask_force] = 1
+    
+    vs_forced = None
+    
+    x_order = np.argsort(ntwk.pfcs[0, :])
+
+    # loop over repeats until steady state is reached
+    rsps = []
+
+    for ctr in range(C.MAX_RUNS_STABILITY):
+
+        # run ntwk with forced spks and vs
+        rsp = ntwk.run(
+            spks_up, P.DT, vs_0=vs_0, gs_0=gs_0,
+            vs_forced=vs_forced, spks_forced=spks_forced)
+
+        # attach place fields and cell types
+        rsp.pfcs = ntwk.pfcs
+        rsp.cell_types = ntwk.cell_types
+        
+        rsps.append(rsp)
+        
+        # compute time window of longest propagation
+        wdw_prop = propagation(rsp, fr_nz, P, C)
+
+        # break if no propagation
+        if wdw_prop is None:
+            stability = 0
+            break
+            
+        # check for activity decay
+        if not decay_check(rsp, *wdw_prop, C):
+            stability = 1
+            break
+            
+        # copy final vs and spks
+        vs_final, spks_final = copy_final(rsp, *wdw_prop, P, C)
+        
+        # create vs/spks forcing matrices from finals for next run
+        n_forced = vs_final.shape[1]
+        
+        vs_forced_ = np.nan * np.zeros((len(vs_final), ntwk.n))
+        spks_forced_ = np.zeros((len(vs_final), ntwk.n))
+        
+        vs_forced_[:, x_order[:n_forced]] = vs_forced_
+        spks_forced_[:, x_order[:n_forced]] = spks_forced_
+        
+        # buffer with prestimulation time
+        pre_stim = (int(C.T_STIM/P.DT), ntwk.n)
+        vs_forced = cc([np.nan * np.zeros(pre_stim), vs_forced_])
+        spks_forced = cc([np.zeros(pre_stim), spks_forced_])
+        
+    else:
+        stability = 1
+        
+    return rsps, stability
+
+
 def propagation(rsp, fr_nz, P, C):
     """
     Check if propagation occurred in single ntwk response.
@@ -480,7 +581,7 @@ def propagation(rsp, fr_nz, P, C):
         return None
     
     
-def decay(rsp, t_start, t_end, C):
+def decay_check(rsp, t_start, t_end, C):
     """
     Return whether response decays from start to end of activity propagation
     from t_start to t_end.
@@ -511,9 +612,9 @@ def decay(rsp, t_start, t_end, C):
     return fr_1 < (C.DECAY_MIN * fr_0)
     
     
-def copy_final_spks(rsp, t_start, t_end, C):
+def copy_final(rsp, t_start, t_end, C):
     """
-    Copy final spks in a ntwk run that exhibited propagation.
+    Copy final vs & spks in a ntwk run that exhibited propagation.
     
     :param rsp: ntwk response instance
     :param t_idx: approximate final time idx with activity above baseline
@@ -531,6 +632,7 @@ def copy_final_spks(rsp, t_start, t_end, C):
     pc_mask = rsp.cell_types == 'PC'
     t_mask = (t_start <= rsp.ts) & (rsp.ts < t_end)
     
+    vs_pc = rsp.vs[:, pc_mask]
     spks_pc = rsp.spks[:, pc_mask]
     
     # get time and cell idxs
@@ -564,14 +666,15 @@ def copy_final_spks(rsp, t_start, t_end, C):
     pc_mask_final = (x_1 <= rsp.pfcs[0, :]) & (rsp.pfcs[0, :] < x_2)
     t_mask_final = (t_1 <= rsp.ts) & (rsp.ts < t_end)
     
-    # get final spks
+    # get final vs & spks
+    vs_final = vs_pc[t_mask_final, :][:, pc_mask_final]
     spks_final = spks_pc[t_mask_final, :][:, pc_mask_final]
     
     # reorder cells according to xs
     xs_final = rsp.pfcs[0, :][pc_mask_final]
     order = np.argsort(xs_final)
     
-    return spks_final[:, order]
+    return vs_final[:, order], spks_final[:, order]
 
 
 def ridge_h(shape, dens, w_n_ec_pc_vs_dist):
