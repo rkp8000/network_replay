@@ -290,7 +290,7 @@ def read_search_error(searcher_id):
 
 # RIDGE-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPERS
 
-def ntwk_obj(p, seed, P, C, pre, test=False):
+def ntwk_obj(seed, p, pre, C, P, test=False):
 
     np.random.seed(seed)
     
@@ -300,71 +300,14 @@ def ntwk_obj(p, seed, P, C, pre, test=False):
     speeds = []
     
     rsps = []
-    rsps_baseline = []
     
     for n_ctr in range(n_ntwks):
         
         # make ntwk
-        
-        ## make ridge
-        pfcs, ws_n_pc_ec = ridge_h(
-            (p['RIDGE_W'], p['RIDGE_H']), p['RHO_PC'], pre['w_n_pc_ec_vs_dist'])
-        n_pc = pfcs.shape[1]
-        n_ec = n_pc
-        
-        ## make INHs
-        n_inh = np.random.poisson(p['P_INH']*n_pc)
-        
-        n = n_pc + n_inh
-        
-        ## make upstream cxns
-        ws_up = {
-            'AMPA': np.zeros((n, n_ec)),
-            'NMDA': cc([np.diag(ws_n_pc_ec), np.zeros((n_inh, n_ec))]),
-            'GABA': np.zeros((n, n_ec))}
-        
-        ## make recurrent cxns
-        ws_rcr = {
-            'AMPA': np.zeros((n, n)),
-            'NMDA': np.zeros((n, n)),
-            'GABA': np.zeros((n, n)),
-        }
-        
-        ### pc -> pc cxns
-        ws_rcr['AMPA'][:n_pc, :n_pc] = p['W_A_PC_PC'] * \
-            cxns_pcs_rcr(pfcs, p['Z_PC'], p['L_PC'])
-        
-        ### pc -> inh cxns
-        ws_rcr['AMPA'][-n_inh:, :n_pc] = p['W_A_INH_PC'] * \
-            np.random.binomial(1, p['P_A_INH_PC'], (n_inh, n_pc))
-        
-        ### inh -> pc cxns
-        ws_rcr['GABA'][:n_pc, -n_inh:] = p['W_G_PC_INH'] * \
-            np.random.binomial(1, p['P_G_PC_INH'], (n_pc, n_inh))
-        
-        ## instantiate ntwk
-        ntwk = LIFNtwk(
-            t_m=cc([np.repeat(P.T_M_PC, n_pc), np.repeat(P.T_M_INH, n_inh)]),
-            e_l=cc([np.repeat(P.E_L_PC, n_pc), np.repeat(P.E_L_INH, n_inh)]),
-            v_th=cc([np.repeat(P.V_TH_PC, n_pc), np.repeat(P.V_TH_INH, n_inh)]),
-            v_reset=cc([
-                np.repeat(P.V_RESET_PC, n_pc), np.repeat(P.V_RESET_INH, n_inh)]),
-            t_r=P.T_R, e_ahp=P.E_AHP_PC, t_ahp=P.T_AHP_PC,
-            w_ahp=cc([np.repeat(P.W_AHP_PC, n_pc), np.repeat(0, n_inh)]),
-            es_syn={'AMPA': P.E_A, 'NMDA': P.E_N, 'GABA': P.E_G},
-            ts_syn={'AMPA': P.T_A, 'NMDA': P.T_N, 'GABA': P.T_G},
-            ws_up=ws_up, ws_rcr=ws_rcr,
-            plasticity=None)
-        
-        ntwk.n_pc = n_pc
-        ntwk.n_ec = n_ec
-        ntwk.n_inh = n_inh
-        
-        ntwk.pfcs = pfcs
-        ntwk.cell_types = cc([np.repeat('PC', n_pc), np.repeat('INH'), n_inh])
+        ntwk = p_to_ntwk(p, pre, P)
         
         # stabilize ntwk
-        rsps_, stability, activity, speed = stabilize(ntwk, pre, p, P, C)
+        rsps_, stability, activity, speed = stabilize(ntwk, p, pre, C, P)
         
         # store results
         stabilities.append(stability)
@@ -383,73 +326,138 @@ def ntwk_obj(p, seed, P, C, pre, test=False):
     return rslts if not test else rslts, rsps_bkgd, rsps
 
 
-def stabilize(ntwk, pre, p, P, C):
+def p_to_ntwk(p, pre, P):
+    """
+    Instantiate a new ntwk from a param dict.
+    """
+    ## make ridge
+    pfcs, ws_n_pc_ec = ridge_h(p, pre)
+    
+    n_pc = pfcs.shape[1]
+    n_ec = n_pc
+    
+    assert len(ws_n_pc_ec) == n_pc
+
+    ## make INHs
+    n_inh = np.random.poisson(p['P_INH'] * n_pc)
+    n = n_pc + n_inh
+
+    ## make upstream cxns
+    ws_up = {
+        'AMPA': np.zeros((n, n_ec)),
+        'NMDA': cc([np.diag(ws_n_pc_ec), np.zeros((n_inh, n_ec))]),
+        'GABA': np.zeros((n, n_ec))
+    }
+
+    ## make recurrent cxns
+    ws_rcr = {
+        'AMPA': np.zeros((n, n)),
+        'NMDA': np.zeros((n, n)),
+        'GABA': np.zeros((n, n)),
+    }
+
+    ### pc -> pc cxns
+    ws_rcr['AMPA'][:n_pc, :n_pc] = p['W_A_PC_PC'] * \
+        cxns_pcs_rcr(pfcs, p['Z_PC'], p['L_PC']).astype(float)
+
+    ### pc -> inh cxns
+    ws_rcr['AMPA'][-n_inh:, :n_pc] = p['W_A_INH_PC'] * \
+        np.random.binomial(1, p['P_A_INH_PC'], (n_inh, n_pc))
+
+    ### inh -> pc cxns
+    ws_rcr['GABA'][:n_pc, -n_inh:] = p['W_G_PC_INH'] * \
+        np.random.binomial(1, p['P_G_PC_INH'], (n_pc, n_inh))
+
+    ## instantiate ntwk
+    ntwk = LIFNtwk(
+        t_m=cc([np.repeat(P.T_M_PC, n_pc), np.repeat(P.T_M_INH, n_inh)]),
+        e_l=cc([np.repeat(P.E_L_PC, n_pc), np.repeat(P.E_L_INH, n_inh)]),
+        v_th=cc([np.repeat(P.V_TH_PC, n_pc), np.repeat(P.V_TH_INH, n_inh)]),
+        v_reset=cc([
+            np.repeat(P.V_RESET_PC, n_pc), np.repeat(P.V_RESET_INH, n_inh)]),
+        
+        t_r=P.T_R, e_ahp=P.E_AHP_PC, t_ahp=P.T_AHP_PC,
+        w_ahp=cc([np.repeat(P.W_AHP_PC, n_pc), np.repeat(P.W_AHP_INH, n_inh)]),
+        
+        es_syn={'AMPA': P.E_A, 'NMDA': P.E_N, 'GABA': P.E_G},
+        ts_syn={'AMPA': P.T_A, 'NMDA': P.T_N, 'GABA': P.T_G},
+        
+        ws_up=ws_up, ws_rcr=ws_rcr, plasticity=None)
+
+    ntwk.n_pc = n_pc
+    ntwk.n_ec = n_ec
+    ntwk.n_inh = n_inh
+
+    ntwk.pfcs = pfcs
+    ntwk.cell_types = cc([np.repeat('PC', n_pc), np.repeat('INH'), n_inh])
+    
+    return ntwk
+
+
+def ridge_h(p, pre):
+    """
+    Randomly sample PCs from along a horizontal "ridge", assigning them each
+    a place-field center and an EC->PC cxn weight.
+    
+    :return: place field centers, EC->PC cxn weights
+    """
+    shape = (p['RIDGE_W'], p['RIDGE_H'])
+    dens= p['RHO_PC']
+    
+    # sample number of nrns
+    n_pcs = np.random.poisson(shape[0] * shape[1] * dens)
+    
+    # sample place field positions
+    pfcs = np.random.uniform(
+        (-shape[0]/2, -shape[1]/2), (shape[0]/2, shape[1]/2),
+        (n_pcs, 2)).T
+    
+    # compute dists to centerline
+    dists = np.abs(pfcs[1, :])
+    
+    # sample and return EC->PC NMDA weights
+    return pfcs, ridge_pre.sample_w_n_pc_ec(dists, pre)
+
+
+def stabilize(ntwk, p, pre, C, P):
     """
     Run ntwk cyclically until activity from beginning to end of sim
     does not change.
     """
+    # sample initial vs and gs and get min nonzero firing rate
+    vs_0, gs_0, fr_nz = sample_v_0_g_0_fr_nz(ntwk, p, C, P)
     
-    # sample initial vs and g_ns
-    vs_0_pc, gs_n_0_pc = ridge_pre.sample_v_g(
-        ws_n_pc_ec, p['RATE_EC'], pre['v_g_n_vs_w_n_pc_ec'])
+    # get x-ordered nrn idxs
+    x_order = np.argsort(ntwk.pfcs[0, :])
     
-    vs_0 = cc([vs_0_pc, P.E_L_INH * np.ones(ntwk.n_inh)])
-    
-    gs_0 = {
-        'AMPA': np.zeros(ntwk.n),
-        'NMDA': cc([gs_n_0, np.zeros(ntwk.n_inh)]),
-        'GABA': np.zeros(ntwk.n)
-    }
-
-    # get background activity level from EC input alone
-
-    ## sample upstream spks from EC
-    ts = np.arange(0, C.SMLN_DUR, P.DT)
-
-    spks_up = np.random.poisson(p['RATE_EC'] * P.DT, (len(ts), ntwk.n_ec))
-
-    ## run ntwk
-    rsp_bkgd = ntwk.run(spks_up, P.DT, vs_0=v_0s, gs_0=g_0s)
-    rsps_bkgd.append(rsp_bkgd)
-
-    ## calculate background rate mean and std
-    rate_bkgd = rsp_bkgd.spks / P.DT
-    rate_bkgd_mean = np.mean(rate_bkgd)
-    rate_bgkd_std = np.std(rate_bkgd)
-    
-    fr_nz = rate_bkgd_mean + (C.MIN_BKGD_FR_SGMS * rate_bkgd_std)
-
     # estimate max forced spks
-    xs = ntwk.pfcs[0, :]
     x_max = -(p['RIDGE_W'] / 2) + (C.N_L_PC_FORCE * p['L_PC'])
-    mask_force = xs < x_max
+    mask_force = ntwk.pfcs[0, :] < x_max
     
-    idx_stim = int(C.T_STIM/P.DT)
+    idx_stim = int(C.T_STIM / P.DT)
     spks_forced = np.zeros((idx_stim + 1, ntwk.n))
     spks_forced[idx_stim, mask_force] = 1
     
     vs_forced = None
-    
-    x_order = np.argsort(ntwk.pfcs[0, :])
 
     # loop over repeats until steady state is reached
     rsps = []
 
-    for ctr in range(C.MAX_RUNS_STABILITY):
+    for ctr in range(C.MAX_RUNS_STABILIZE):
 
         # run ntwk with forced spks and vs
         rsp = ntwk.run(
             spks_up, P.DT, vs_0=vs_0, gs_0=gs_0,
             vs_forced=vs_forced, spks_forced=spks_forced)
 
-        # attach place fields and cell types
+        # attach useful attributes
         rsp.pfcs = ntwk.pfcs
         rsp.cell_types = ntwk.cell_types
         
         rsps.append(rsp)
         
-        # compute time window of longest propagation
-        wdw_prop = check_propagation(rsp, fr_nz, P, C)
+        # get time window of longest propagation
+        wdw_prop = check_propagation(rsp, fr_nz, p, C, P)
 
         # break if no propagation
         if wdw_prop is None:
@@ -457,12 +465,12 @@ def stabilize(ntwk, pre, p, P, C):
             break
             
         # check for activity decay
-        if not check_decay(rsp, *wdw_prop, C):
+        if not check_decay(rsp, wdw_prop, C, P):
             stability = 1
             break
             
         # copy final vs and spks
-        vs_final, spks_final = copy_final(rsp, *wdw_prop, P, C)
+        vs_final, spks_final = copy_final(rsp, wdw_prop, C, P)
         
         # create vs/spks forcing matrices from finals for next run
         n_forced = vs_final.shape[1]
@@ -470,8 +478,8 @@ def stabilize(ntwk, pre, p, P, C):
         vs_forced_ = np.nan * np.zeros((len(vs_final), ntwk.n))
         spks_forced_ = np.zeros((len(vs_final), ntwk.n))
         
-        vs_forced_[:, x_order[:n_forced]] = vs_forced_
-        spks_forced_[:, x_order[:n_forced]] = spks_forced_
+        vs_forced_[:, x_order[:n_forced]] = vs_final
+        spks_forced_[:, x_order[:n_forced]] = spks_final
         
         # buffer with prestimulation time
         pre_stim = (int(C.T_STIM/P.DT), ntwk.n)
@@ -486,15 +494,49 @@ def stabilize(ntwk, pre, p, P, C):
         speed = 0
     else:
         # get activity and speed of final ntwk response
-        activity = get_activity_level(rsp, p, wdw_prop, C)
-        speed = get_speed(...)
-    
-    
+        activity = get_activity(rsp, wdw_prop, p, C)
+        speed = get_speed(rsp, wdw_prop, C)
     
     return rsps, stability, activity, speed
 
 
-def check_propagation(rsp, fr_nz, P, C):
+def sample_v_0_g_0_fr_nz(ntwk, p, C, P, test=False):
+    """
+    Sample initial voltages and gs, as well as minimum average firing
+    rate required for a ntwk's activity to be considered non-zero.
+    """
+    # sample initial vs and g_ns
+    vs_0_pc, gs_n_0_pc = ridge_pre.sample_v_g(ntwk, p, pre)
+    
+    vs_0 = cc([vs_0_pc, P.E_L_INH * np.ones(ntwk.n_inh)])
+    
+    gs_0 = {
+        'AMPA': np.zeros(ntwk.n),
+        'NMDA': cc([gs_n_0, np.zeros(ntwk.n_inh)]),
+        'GABA': np.zeros(ntwk.n)
+    }
+    
+    ts = np.arange(0, C.SMLN_DUR, P.DT)
+
+    spks_up = np.random.poisson(p['RATE_EC'] * P.DT, (len(ts), ntwk.n_ec))
+
+    ## run ntwk
+    rsp_bkgd = ntwk.run(spks_up, P.DT, vs_0=vs_0, gs_0=gs_0)
+
+    ## calculate background PC rate mean and std
+    rate_bkgd = rsp_bkgd.spks[:, ntwk.cell_types == 'PC'] / P.DT
+    rate_bkgd_mean = np.mean(rate_bkgd)
+    rate_bgkd_std = np.std(rate_bkgd)
+    
+    fr_nz = rate_bkgd_mean + (C.MIN_BKGD_PC_FR_SGMS * rate_bkgd_std)
+    
+    if not test:
+        return vs_0, gs_0, fr_nz
+    else:
+        return vs_0, gs_0, fr_nz, rsp_bkgd
+
+
+def check_propagation(rsp, fr_nz, p, C, P):
     """
     Check if propagation occurred in single ntwk response.
     If so, return start and end times of longest propagation, otherwise
@@ -512,13 +554,14 @@ def check_propagation(rsp, fr_nz, P, C):
             'Ntwk response must include cell types '
             'in attribute rsp.cell_types.')
         
-    # get spks from pc_pop
+    # get pfcs and spks from pc_pop
     pc_mask = rsp.cell_types == 'PC'
+    pfcs_pc = rsp.pfcs[:, pc_mask]
     spks_pc = rsp.spks[:, pc_mask]
     
-    # get smoothed PC firing rate, avgd over cells
-    fr_pc = spks_pc.sum(1) / P.DT / spks_pc.shape[1]
-    fr_pc_smooth = aux.running_mean(fr_pc, int(round(C.PRPGN_T_WDW/P.DT)))
+    # get smoothed PC firing rate, avg'd over cells
+    fr_pc = spks_pc.mean(1) / P.DT
+    fr_pc_smooth = aux.running_mean(fr_pc, int(C.PRPGN_WDW / P.DT))
     
     # divide into segments where pc fr exceeds bkgd
     segs = aux.find_segs(fr_pc_smooth > fr_nz)
@@ -527,46 +570,42 @@ def check_propagation(rsp, fr_nz, P, C):
         return None
     
     # get longest segment and convert to continuous time
-    idx_longest = np.argmax(segs[:, 1] - segs[:, 0])
-    seg_longest = segs[idx_longest]
-    seg = (P.DT * seg_longest[0], P.DT * seg_longest[1])
+    wdw = segs[np.argmax(segs[:, 1] - segs[:, 0])] * P.DT
     
     # return seg if activity was still going on at end of run
-    if seg[1] >= (rsp.ts[-1] - prpgn_t_wdw/2):
-        return seg
+    if wdw[1] >= (rsp.ts[-1] - C.PRPGN_WDW/2):
+        return wdw
     
-    # check if final cells were active during final moments
-    # activity was above baseline
-    pfcs_pc = rsp.pfcs[:, pc_mask]
+    # check if final cells were active during final moments of seg
     
     ## get mask of final cells (x greater than ridge end minus length scale)
-    final_pc_mask = pfcs_pc[0, :] >= rsp.ridge_x[1] - rsp.l_pc
+    final_pc_mask = pfcs_pc[0, :] >= rsp.ridge_x[1] - p['L_PC']
     n_final = final_pc_mask.sum()
     
     ## select final time window as approx time for constant speed
     ## propagation to cover one length scale
-    speed = (rsp.ridge_x[1] - rsp.ridge_x[0]) / (segs[1] - segs[0])
-    t_start = segs[1] - (rsp.l_pc / speed)
-    t_end = segs[1]
+    speed = (p['RIDGE_W']) / (wdw[1] - wdw[0])
+    t_start = wdw[1] - (p['L_PC'] / speed)
+    t_end = wdw[1]
     t_mask = (t_start <= rsp.ts) & (rsp.ts < t_end)
     
     if not t_mask.sum():
         return None
     
     ## compute average per-cell firing rate of final cells during final window
-    fr_final = spks_pc[:, final_pc_mask][t_mask] / P.DT / n_final
+    fr_final = np.mean(spks_pc[t_mask, :][:, final_pc_mask] / P.DT)
     
     ## check if firing rate for final cells in final time window above baseline
     if fr_final > fr_nz:
-        return seg
+        return wdw
     else:
         return None
     
     
-def check_decay(rsp, wdw, C):
+def check_decay(rsp, wdw, C, P):
     """
     Return whether response decays from start to end of activity propagation
-    from t_start to t_end.
+    over given window.
     
     :param rsp: ntwk response object
     :param wdw: (start, end) of propagation epoch
@@ -592,60 +631,7 @@ def check_decay(rsp, wdw, C):
     return fr_1 < (C.DECAY_MIN * fr_0)
 
 
-def get_activity_level(rsp, p, wdw, C):
-    """
-    Get ratio of time-averaged firing rate during propagation period to
-    PC density (with final units of m^2/s).
-    
-    :param p: param dict for current trial
-    :param wdw: (start, end) of propagation epoch
-    """
-    # convert activity measurement times to absolute
-    dur = wdw[1] - wdw[0]
-    
-    start = wdw[0] + C.ACTIVITY_READ[0] * dur
-    end = wdw[0] + C.ACTIVITY_READ[1] * dur
-    
-    # get total firing rate in window
-    mask = (start <= rsp.ts) * (rsp.ts < end)
-    fr_pop = np.sum(rsp.spks[mask] / P.DT)
-    
-    # divide population firing rate by density
-    return fr_pop / p['RHO_PC']
-
-
-def get_speed(rsp, wdw, C):
-    """
-    Get linear speed of propagating ntwk response.
-    
-    :param wdw: (start, end) of propagation epoch
-    """
-    pc_mask = rsp.cell_types == 'PC'
-    
-    # convert speed measurement times to absolute
-    dur = wdw[1] - wdw[0]
-    
-    start = wdw[0] + C.SPEED_READ[0] * dur
-    end = wdw[0] + C.SPEED_READ[1] * dur
-    
-    t_mask = (start <= rsp.ts) & (rsp.ts < end)
-    
-    # get times and x-positions of all spks
-    spk_t_idxs, spk_cells = rsp.spks[t_mask, pc_mask].nonzero()
-    
-    spk_ts = rsp.ts[mask][spk_t_idxs]
-    spk_xs = rsp.pfcs[0, pc_mask][spk_cells]
-    
-    # fit line to get approximate speed
-    rgr = Lasso()
-    rgr.fit(spk_ts[:, None], spk_xs)
-    
-    speed = rgr.coef_[0]
-    
-    return speed
-    
-    
-def copy_final(rsp, wdw, C):
+def copy_final(rsp, wdw, p, C):
     """
     Copy final vs & spks in a ntwk run that exhibited propagation.
     
@@ -667,15 +653,16 @@ def copy_final(rsp, wdw, C):
     
     vs_pc = rsp.vs[:, pc_mask]
     spks_pc = rsp.spks[:, pc_mask]
+    pfcs_pc = rsp.pfcs[:, pc_mask]
     
     # get time and cell idxs
-    idxs_time, idxs_pc = spks_pc[t_mask, :].nonzero()
+    spk_t_idxs, spk_cells = spks_pc[t_mask, :].nonzero()
     
     # convert time idxs to time
-    spk_ts = P.DT * idxs_time + wdw[0]
+    spk_ts = rsp.ts[t_mask][spk_t_idxs]
     
     # convert cell idxs to x-positions
-    spk_xs = rsp.pfcs[0, :][idxs_pc]
+    spk_xs = pfcs_pc[0, :][spk_cells]
     
     # fit line
     rgr = Lasso()
@@ -683,12 +670,12 @@ def copy_final(rsp, wdw, C):
     
     # label spks as belonging to wave if within fraction length scales of line
     dists = np.abs(rgr.predict(spk_ts[:, None]) - spk_xs)
-    in_wave = dists <= C.WAVE_TOL * rsp.l_pc
+    in_wave = dists <= C.WAVE_TOL * p['L_PC']
     
     # let x_2 be x-pos of rightmost spk belonging to wave and x_1 be
     # x_2 minus a "look-back factor" times the length scale
     x_2 = spk_xs[in_wave].max()
-    x_1 = x_2 - (C.LOOK_BACK_X * rsp.l_pc)
+    x_1 = x_2 - (C.LOOK_BACK_X * p['L_PC'])
     
     # let t_2 be final time of wave and t_1 be time of first in-wave
     # spk from any cell between x_1 and x_2
@@ -696,47 +683,75 @@ def copy_final(rsp, wdw, C):
     t_1 = spk_ts[(x_1 <= spk_xs) & (spk_xs < x_2) & in_wave]
 
     # make cell and time mask
-    pc_mask_final = (x_1 <= rsp.pfcs[0, :]) & (rsp.pfcs[0, :] < x_2)
-    t_mask_final = (t_1 <= rsp.ts) & (rsp.ts < t_end)
+    pc_mask_final = (x_1 <= pfcs_pc[0, :]) & (pfcs_pc[0, :] < x_2)
+    t_mask_final = (t_1 <= rsp.ts) & (rsp.ts < t_2)
     
     # get final vs & spks
     vs_final = vs_pc[t_mask_final, :][:, pc_mask_final]
     spks_final = spks_pc[t_mask_final, :][:, pc_mask_final]
     
     # reorder cells according to xs
-    xs_final = rsp.pfcs[0, :][pc_mask_final]
-    order = np.argsort(xs_final)
+    xs_final = pfcs_pc[0, pc_mask_final]
+    x_order_final = np.argsort(xs_final)
     
-    return vs_final[:, order], spks_final[:, order]
+    return vs_final[:, x_order_final], spks_final[:, x_order_final]
 
 
-def ridge_h(shape, dens, w_n_ec_pc_vs_dist):
+def get_activity(rsp, wdw, p, C):
     """
-    Randomly sample PCs from along a horizontal "ridge", assigning them each
-    a place-field center and an EC->PC cxn weight.
+    Get ratio of time-averaged firing rate during propagation period to
+    PC density (with final units of m^2/s).
     
-    :param shape: tuple specifying ridge shape (m)
-    :param dens: number of place fields per m^2
-    :param ws_n_ec_pc_vs_dist: dict with keys:
-        'dists': array of uniformly spaced distances used to sample weights
-        'ws_n_ec_pc': distribution of EC->PC NMDA cxn weights to sample from as
-            fn of dists
-    
-    :return: place field centers, EC->PC cxn weights
+    :param rsp: ntwk response object
+    :param wdw: (start, end) of propagation epoch
     """
-    # sample number of nrns
-    n_pcs = np.random.poisson(shape[0] * shape[1] * dens)
+    # convert activity measurement times to absolute
+    dur = wdw[1] - wdw[0]
     
-    # sample place field positions
-    pfcs = np.random.uniform(
-        (-shape[0]/2, -shape[1]/2), (shape[0]/2, shape[1]/2),
-        (n_pcs, 2)).T
+    start = wdw[0] + C.ACTIVITY_READ[0] * dur
+    end = wdw[0] + C.ACTIVITY_READ[1] * dur
     
-    # compute dists to centerline
-    dists = np.abs(pfcs[1, :])
+    # get pop. firing rate in window
+    mask = (start <= rsp.ts) * (rsp.ts < end)
+    spk_cts_pop = np.sum(rsp.spks[mask, :], 1)
+    fr_pop = np.mean(spk_cts_pop / P.DT)
     
-    # sample and return EC->PC NMDA weights
-    return pfcs, ridge_pre.sample_w_n_ec_pc(dists, w_n_ec_pc_vs_dist)
+    # divide population firing rate by density
+    return fr_pop / p['RHO_PC']
+
+
+def get_speed(rsp, wdw, C):
+    """
+    Get linear speed of propagating ntwk response.
+    
+    :param rsp: ntwk response object
+    :param wdw: (start, end) of propagation epoch
+    """
+    pc_mask = rsp.cell_types == 'PC'
+    spks_pc = rsp.spks[:, pc_mask]
+    pfcs_pc = rsp.pfcs[:, pc_mask]
+    
+    # convert speed measurement times to absolute
+    dur = wdw[1] - wdw[0]
+    
+    start = wdw[0] + C.SPEED_READ[0] * dur
+    end = wdw[0] + C.SPEED_READ[1] * dur
+    
+    t_mask = (start <= rsp.ts) & (rsp.ts < end)
+    
+    # get times and x-positions of all spks
+    spk_t_idxs, spk_cells = spks_pc[t_mask, :].nonzero()
+    
+    spk_ts = rsp.ts[t_mask][spk_t_idxs]
+    spk_xs = pfcs_pc[0, :][spk_cells]
+    
+    # fit line to get approximate speed
+    rgr = Lasso()
+    rgr.fit(spk_ts[:, None], spk_xs)
+    
+    speed = rgr.coef_[0]
+    
+    return speed
 
 
 # AUXILIARY SEARCH FUNCTIONS
@@ -770,7 +785,7 @@ def validate(cfg, ctr):
         raise Exception('CFG P_RANGES must be two-element tuples.')
         
     required = [
-        'RIDGE_H', 'RIDGE_W', 'RHO_PC', 'Z_PC', 'L_PC', 'W_A_PC_PC',
+        'RIDGE_H', 'RIDGE_W', 'P_INH', 'RHO_PC', 'Z_PC', 'L_PC', 'W_A_PC_PC',
         'P_A_INH_PC', 'W_A_INH_PC', 'P_G_PC_INH', 'W_G_PC_INH', 'RATE_EC'
     ]
     
@@ -854,7 +869,7 @@ def trial_to_p(trial):
     return {
         'RIDGE_H': trial.ridge_h,
         'RIDGE_W': trial.ridge_w,
-        
+        'P_INH': trial.p_inh,
         'RHO_PC': trial.rho_pc,
         
         'Z_PC': trial.z_pc,
@@ -1113,7 +1128,7 @@ def save_ridge_trial(session, searcher, seed, p, rslt):
         
         ridge_h=p['RIDGE_H'],
         ridge_w=p['RIDGE_W'],
-        
+        p_inh=p['P_INH'],
         rho_pc=p['RHO_PC'],
         
         z_pc=p['Z_PC'],
