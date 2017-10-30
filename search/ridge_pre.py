@@ -14,7 +14,7 @@ from traj import Traj, spks_up_from_traj
 cc = np.concatenate
 
 
-def w_n_ec_pc_vs_dist(P, C):
+def w_n_pc_ec_vs_dist(C, P):
     """
     Compute and save w_n_ec_pc distributions as
     function of distance from place-field center.
@@ -77,8 +77,8 @@ def w_n_ec_pc_vs_dist(P, C):
     
     # save results
     save_path = aux.save(
-        C.PATH_W_N_EC_PC_VS_DIST,
-        {'dist': C.DIST_PRE, 'w_n_ec_pc': ws_n_pc_ec})
+        C.PATH_W_N_PC_EC_VS_DIST,
+        {'dist': C.DIST_PRE, 'w_n_pc_ec': ws_n_pc_ec})
     
     print('w_n_pc_ec vs dists file saved at "{}".'.format(save_path))
     
@@ -95,23 +95,23 @@ def w_n_ec_pc_vs_dist(P, C):
     ax.set_ylim(y_min - .1*y_range, y_max + .1*y_range)
         
     ax.set_xlabel('pfc dist from rat\'s location (m)')
-    ax.set_ylabel('w_n_ec_pc final')
+    ax.set_ylabel('w_n_pc_ec final')
     
     set_font_size(ax, 16)
     
     return fig
         
 
-def v_g_n_vs_w_n_ec_pc_rate_ec(P, C, cmap='hot'):
+def v_g_n_vs_w_n_pc_ec_rate_ec(C, P, cmap='hot'):
     """
     Compute and save steady-state v and g_n distributions
-    as function of w_n_ec_pc and rate_ec.
+    as function of w_n_pc_ec and rate_ec.
     """
     np.random.seed(C.SEED_PRE)
-    n = len(C.W_N_EC_PC_PRE)
+    n = len(C.W_N_PC_EC_PRE)
     
     # build PC ntwk
-    ws_up = {'NMDA': np.diag(C.W_N_EC_PC_PRE)}
+    ws_up = {'NMDA': np.diag(C.W_N_PC_EC_PRE)}
     ws_rcr = {'NMDA': np.zeros((n, n))}
     
     ntwk = LIFNtwk(
@@ -125,7 +125,7 @@ def v_g_n_vs_w_n_ec_pc_rate_ec(P, C, cmap='hot'):
     ts = np.arange(0, C.DUR_V_G_PRE, P.DT)
     
     shape = (
-        len(C.W_N_EC_PC_PRE),
+        len(C.W_N_PC_EC_PRE),
         len(C.RATE_EC_PRE),
         C.N_TIMEPOINTS_V_G_PRE,
     )
@@ -156,15 +156,15 @@ def v_g_n_vs_w_n_ec_pc_rate_ec(P, C, cmap='hot'):
     save_path = aux.save(
         C.PATH_V_G_N_VS_W_N_PC_EC_RATE_EC,
         {
-            'w_n_ec_pc': C.W_N_EC_PC_PRE,
+            'w_n_pc_ec': C.W_N_PC_EC_PRE,
             'rate_ec': C.RATE_EC_PRE,
             'v': vs, 'g_n': gs_n
         })
     
-    print('v, g_n vs w_n_ec_pc, rate_ec saved at "{}".'.format(save_path))
+    print('v, g_n vs w_n_pc_ec, rate_ec saved at "{}".'.format(save_path))
     
     # plot results
-    w_, rate_ = np.meshgrid(C.W_N_EC_PC_PRE, C.RATE_EC_PRE, indexing='ij')
+    w_, rate_ = np.meshgrid(C.W_N_PC_EC_PRE, C.RATE_EC_PRE, indexing='ij')
     
     v_means = vs.mean(-1)
     v_stds = vs.std(-1)
@@ -206,7 +206,7 @@ def v_g_n_vs_w_n_ec_pc_rate_ec(P, C, cmap='hot'):
         ax.set_xlim(w_min - .1*w_range, w_max + .1*w_range)
         
         ax.set_xticks([w_min, w_max])
-        ax.set_xlabel('w_n_ec_pc')
+        ax.set_xlabel('w_n_pc_ec')
         ax.set_ylabel('rate_ec (Hz)')
         
         set_font_size(ax, 16)
@@ -214,29 +214,34 @@ def v_g_n_vs_w_n_ec_pc_rate_ec(P, C, cmap='hot'):
     return fig
 
 
-def sample_w_n_ec_pc(dists, w_n_ec_pc_vs_dist):
-    """Sample a set of w_n_ec_pc values given distances."""
+def sample_w_n_pc_ec(dists, pre):
+    """Sample a set of w_n_pc_ec values given distances."""
+    w_n_pc_ec_vs_dist = pre['w_n_pc_ec_vs_dist']
     
-    idxs_dist = aux.idx_closest(dists, w_n_ec_pc_vs_dist['dist'])
+    idxs_dist = aux.idx_closest(dists, w_n_pc_ec_vs_dist['dist'])
     idxs_rand = np.random.randint(
-        0, w_n_ec_pc_vs_dist['w_n_ec_pc'].shape[1], len(dists))
+        0, w_n_pc_ec_vs_dist['w_n_pc_ec'].shape[1], len(dists))
     
-    return w_n_ec_pc_vs_dist['w_n_ec_pc'][idxs_dist, idxs_rand]
+    return w_n_pc_ec_vs_dist['w_n_pc_ec'][idxs_dist, idxs_rand]
 
 
-def sample_v_g(ws_n_ec_pc, rates_ec, v_g_n_vs_w_n_ec_pc_rate_ec):
+def sample_v_g(ntwk, p, pre):
     """
     Sample a set of pc voltages and gs_n given w_n_ec_pc and rate_ec.
     """
+    ws_n_pc_ec = np.diagonal(ntwk.ws_up['NMDA'])
+    v_g_n_vs_w_n_pc_ec_rate_ec = pre['v_g_n_vs_w_n_pc_ec_rate_ec']
     
     idxs_w = aux.idx_closest(
-        ws_n_ec_pc, v_g_n_vs_w_n_ec_pc_rate_ec['w_n_ec_pc'])
-    idxs_r = aux.idx_closest(
-        rates_ec, v_g_n_vs_w_n_ec_pc_rate_ec['rate_ec'])
-    idxs_rand = np.random.randint(
-        0, v_g_n_vs_w_n_ec_pc_rate_ec['v'].shape[-1], len(ws_n_ec_pc))
+        ws_n_pc_ec, v_g_n_vs_w_n_pc_ec_rate_ec['w_n_pc_ec'])
     
-    vs = v_g_n_vs_w_n_ec_pc_rate_ec['v'][idxs_w, idxs_r, idxs_rand]
-    gs_n = v_g_n_vs_w_n_ec_pc_rate_ec['g_n'][idxs_w, idxs_r, idxs_rand]
+    idxs_r = aux.idx_closest(
+        p['RATE_EC'], v_g_n_vs_w_n_pc_ec_rate_ec['rate_ec'])
+    
+    idxs_rand = np.random.randint(
+        0, v_g_n_vs_w_n_pc_ec_rate_ec['v'].shape[-1], len(ws_n_pc_ec))
+    
+    vs = v_g_n_vs_w_n_pc_ec_rate_ec['v'][idxs_w, idxs_r, idxs_rand]
+    gs_n = v_g_n_vs_w_n_pc_ec_rate_ec['g_n'][idxs_w, idxs_r, idxs_rand]
     
     return vs, gs_n

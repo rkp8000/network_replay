@@ -94,7 +94,8 @@ def raster(
             for ct, c in colors:
                 
                 if ct not in rsp.cell_types:
-                    print('WARNING: Cell type {} not found in ntwk rsp.'.format(ct))
+                    print(
+                        'WARNING: Cell type {} not found in ntwk rsp.'.format(ct))
                 else:
                     cs[rsp.cell_types == ct] = c
                 
