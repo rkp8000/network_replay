@@ -8,6 +8,7 @@
 *.db
 
 sandbox.ipynb
+temp.ipynb
 *ipynb_checkpoints
 
 sims/
@@ -16,4 +17,5 @@ test_anim/
 LOCAL.py
 
 search/config/*
+search/pre/*
 
