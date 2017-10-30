@@ -46,25 +46,29 @@ def cxns_pcs_rcr(pfs, z_pc, l_pc):
     return cxns
 
 
-# INITIAL CONDITIONS
+# INITIALIZATION HELPERS
 
-def sample_vs_gs_0(ws_n_pc_ec, v_g_init):
+def spks_forced_rand(ntwk, mask, itvl, freq, dt):
     """
-    Return an initial membrane voltage and NMDA conductance for each
-    of several PCs, depending on their EC->PC cxn weight.
+    Sample a forced spike matrix from a Poisson distribution.
+    
+    :param ntwk: LIFNtwk instance
+    :param mask: mask over which cells to potentially make spike
+    :param itvl: itvl to force spikes over
+    :param freq: freq of forced spikes
+    :param dt: simulation timestep
     """
+    # generate spks inside itvl
+    dur = itvl[1] - itvl[0]
     
-    dw = np.mean(np.diff(v_g_init['weights']))
-    w_idxs = np.round((ws_n_pc_ec - v_g_init['weights'][0])/ dw).astype(int)
+    spks_forced = np.zeros((int(dur/dt), ntwk.n), dtype=bool)
+    spks_forced[:, mask] = np.random.binomial(
+        1, freq*dt, (len(spks_forced), mask.sum()))
     
-    vs = np.nan * np.zeros(len(ws_n_pc_ec))
-    gs = {'NMDA': np.nan * np.zeros(len(ws_n_pc_ec))}
+    # buffer spks_forced to start at itvl[0]
+    buf = np.zeros((int(itvl[0]/dt), ntwk.n), dtype=bool)
     
-    for nrn_ctr, w_idx in enumerate(w_idxs):
-        vs[nrn_ctr] = np.random.choice(v_g_init['vs'][:, w_idx])
-        gs['NMDA'][nrn_ctr] = np.random.choice(v_g_init['gs'][:, w_idx])
-        
-    return vs, gs
+    return np.concatenate([buf, spks_forced])
 
 
 # NETWORK CLASSES AND FUNCTIONS
@@ -459,8 +463,9 @@ class NtwkResponse(object):
     """
 
     def __init__(
-            self, ts, vs, spks, v_rest, v_th, gs, g_ahp, ws_rcr, ws_up, cell_types=None,
-            cs=None, ws_plastic=None, masks_plastic=None, pfcs=None):
+            self, ts, vs, spks, v_rest, v_th, gs, g_ahp, ws_rcr, ws_up, 
+            cell_types=None, cs=None, ws_plastic=None, masks_plastic=None,
+            pfcs=None):
         """Constructor."""
         # check args
         if (cell_types is not None) and (len(cell_types) != vs.shape[1]):
