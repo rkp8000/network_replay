@@ -1,7 +1,7 @@
 SMLN_ID = 'test_guided'
 
 START = {
-    'RIDGE_H': 1, 'RIDGE_W': 2, 'RHO_PC': 1,
+    'RIDGE_H': 1, 'RIDGE_W': 2, 'P_INH': 1, 'RHO_PC': 1,
     'Z_PC': 2, 'L_PC': 1, 'W_A_PC_PC': 2,
     'P_A_INH_PC': 1, 'W_A_INH_PC': 2,
     'P_G_PC_INH': 3, 'W_G_PC_INH': 5,
@@ -17,7 +17,7 @@ START = {
 P_RANGES = (
     ('RIDGE_H', [0, 10, 1]),
     ('RIDGE_W', [0, 10, 1]),
-    
+    ('P_INH', [0, 10, 1]),
     ('RHO_PC', [0, 10, 1]),
         
     ('Z_PC', [0, 10, 1]),

@@ -35,7 +35,7 @@ class RidgeTrial(Base):
     # parameters
     ridge_h = Column(Float)
     ridge_w = Column(Float)
-    
+    p_inh = Column(Float)
     rho_pc = Column(Float)
     
     z_pc = Column(Float)
