@@ -420,7 +420,7 @@ def ridge_h(p, pre):
     return pfcs, ridge_pre.sample_w_n_pc_ec(dists, pre)
 
 
-def stabilize(ntwk, p, pre, C, P):
+def stabilize(ntwk, p, pre, C, P, test=False):
     """
     Run ntwk cyclically until activity from beginning to end of sim
     does not change.
@@ -435,6 +435,9 @@ def stabilize(ntwk, p, pre, C, P):
     x_max = -(p['RIDGE_W'] / 2) + (C.N_L_PC_FORCE * p['L_PC'])
     mask_force = ~np.isnan(ntwk.pfcs[0, :])
     mask_force[mask_force] = ntwk.pfcs[0, mask_force] < x_max
+    
+    if test:
+        print('{} initial forced spks.'.format(mask_force.sum()))
     
     idx_stim = int(C.T_STIM / P.DT)
     spks_forced = np.zeros((idx_stim + 1, ntwk.n))
@@ -474,6 +477,9 @@ def stabilize(ntwk, p, pre, C, P):
             
         # get mean PC fr during decay check window
         fr_decay = get_fr_decay(rsp, wdw_prop, C, P)
+        
+        if test:
+            print('Run {0}: fr_decay = {1:.3} Hz'.format(ctr+1, fr_decay))
         
         # check for activity decay since last run
         if fr_decay < fr_decay_prev * C.DECAY_RATIO:
