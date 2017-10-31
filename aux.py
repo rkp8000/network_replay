@@ -116,7 +116,7 @@ def running_mean(x, wdw):
         raise ValueError('Arg "x" must be 1-D array.')
         
     if not wdw % 2 == 1:
-        raise ValueError('Arg "wdw" must be odd.')
+        wdw = wdw - 1
         
     # first row and last col
     r = cc([np.repeat(np.nan, int(np.floor(wdw/2))), x[:int(np.ceil(wdw/2))]])
