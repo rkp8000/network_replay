@@ -8,12 +8,12 @@ from aux import save
 
 # CONNECTIVITY FUNCTIONS
 
-def cxns_pcs_rcr(pfs, z_pc, l_pc):
+def cxns_pcs_rcr(pfcs, z_pc, l_pc):
     """
     Generate a recurrent connectivity matrix with preferential
     attachment between pyramidal cells with nearby place fields.
     
-    :param pfs: (2 x N) array of place field centers (cells without place fields
+    :param pfcs: (2 x N) array of place field centers (cells without place fields
         should have nans in their place)
     :param z_pc: normalization factor for connections
     :param l_pc: length scale of preferential attachment (m)
@@ -61,9 +61,12 @@ def spks_forced_rand(ntwk, mask, itvl, freq, dt):
     # generate spks inside itvl
     dur = itvl[1] - itvl[0]
     
+    if mask.dtype == 'bool':
+        mask = mask.nonzero()[0]
+    
     spks_forced = np.zeros((int(dur/dt), ntwk.n), dtype=bool)
     spks_forced[:, mask] = np.random.binomial(
-        1, freq*dt, (len(spks_forced), mask.sum()))
+        1, freq*dt, (len(spks_forced), len(mask)))
     
     # buffer spks_forced to start at itvl[0]
     buf = np.zeros((int(itvl[0]/dt), ntwk.n), dtype=bool)
