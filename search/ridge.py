@@ -479,7 +479,8 @@ def stabilize(ntwk, p, pre, C, P, test=False):
         fr_decay = get_fr_decay(rsp, wdw_prop, C, P)
         
         if test:
-            print('Run {0}: fr_decay = {1:.3} Hz'.format(ctr+1, fr_decay))
+            print('Run {0}: {1} forced spks, fr_decay = {2:.3} Hz'.format(
+                ctr+1, spks_forced.sum(), fr_decay))
         
         # check for activity decay since last run
         if fr_decay < fr_decay_prev * C.DECAY_RATIO:
