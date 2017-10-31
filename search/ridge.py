@@ -2,6 +2,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 import importlib
 import numpy as np
+from sklearn.linear_model import Lasso, LinearRegression
 import threading
 import time
 import traceback
@@ -388,8 +389,8 @@ def p_to_ntwk(p, pre, P):
     ntwk.n_ec = n_ec
     ntwk.n_inh = n_inh
 
-    ntwk.pfcs = pfcs
-    ntwk.cell_types = cc([np.repeat('PC', n_pc), np.repeat('INH'), n_inh])
+    ntwk.pfcs = cc([pfcs, np.nan * np.zeros((2, n_inh))], 1)
+    ntwk.cell_types = cc([np.repeat('PC', n_pc), np.repeat('INH', n_inh)])
     
     return ntwk
 
@@ -494,13 +495,13 @@ def stabilize(ntwk, p, pre, C, P):
         speed = 0
     else:
         # get activity and speed of final ntwk response
-        activity = get_activity(rsp, wdw_prop, p, C)
+        activity = get_activity(rsp, wdw_prop, p, C, P)
         speed = get_speed(rsp, wdw_prop, C)
     
     return rsps, stability, activity, speed
 
 
-def sample_v_0_g_0_fr_nz(ntwk, p, C, P, test=False):
+def sample_v_0_g_0_fr_nz(ntwk, p, pre, C, P, test=False):
     """
     Sample initial voltages and gs, as well as minimum average firing
     rate required for a ntwk's activity to be considered non-zero.
@@ -512,7 +513,7 @@ def sample_v_0_g_0_fr_nz(ntwk, p, C, P, test=False):
     
     gs_0 = {
         'AMPA': np.zeros(ntwk.n),
-        'NMDA': cc([gs_n_0, np.zeros(ntwk.n_inh)]),
+        'NMDA': cc([gs_n_0_pc, np.zeros(ntwk.n_inh)]),
         'GABA': np.zeros(ntwk.n)
     }
     
@@ -524,16 +525,17 @@ def sample_v_0_g_0_fr_nz(ntwk, p, C, P, test=False):
     rsp_bkgd = ntwk.run(spks_up, P.DT, vs_0=vs_0, gs_0=gs_0)
 
     ## calculate background PC rate mean and std
-    rate_bkgd = rsp_bkgd.spks[:, ntwk.cell_types == 'PC'] / P.DT
+    rate_bkgd = np.mean(rsp_bkgd.spks[:, ntwk.cell_types == 'PC'] / P.DT, 1)
     rate_bkgd_mean = np.mean(rate_bkgd)
-    rate_bgkd_std = np.std(rate_bkgd)
+    rate_bkgd_std = np.std(rate_bkgd)
     
-    fr_nz = rate_bkgd_mean + (C.MIN_BKGD_PC_FR_SGMS * rate_bkgd_std)
+    fr_nz = max(
+        rate_bkgd_mean + (C.MIN_PC_FR_NZ_SGMS * rate_bkgd_std), C.MIN_FR_NZ)
     
     if not test:
         return vs_0, gs_0, fr_nz
     else:
-        return vs_0, gs_0, fr_nz, rsp_bkgd
+        return vs_0, gs_0, fr_nz, rsp_bkgd, rate_bkgd
 
 
 def check_propagation(rsp, fr_nz, p, C, P):
@@ -561,7 +563,7 @@ def check_propagation(rsp, fr_nz, p, C, P):
     
     # get smoothed PC firing rate, avg'd over cells
     fr_pc = spks_pc.mean(1) / P.DT
-    fr_pc_smooth = aux.running_mean(fr_pc, int(C.PRPGN_WDW / P.DT))
+    fr_pc_smooth = aux.running_mean(fr_pc, int(C.PPGN_WDW / P.DT))
     
     # divide into segments where pc fr exceeds bkgd
     segs = aux.find_segs(fr_pc_smooth > fr_nz)
@@ -573,19 +575,19 @@ def check_propagation(rsp, fr_nz, p, C, P):
     wdw = segs[np.argmax(segs[:, 1] - segs[:, 0])] * P.DT
     
     # return seg if activity was still going on at end of run
-    if wdw[1] >= (rsp.ts[-1] - C.PRPGN_WDW/2):
+    if wdw[1] >= (rsp.ts[-1] - C.PPGN_WDW/2):
         return wdw
     
     # check if final cells were active during final moments of seg
     
     ## get mask of final cells (x greater than ridge end minus length scale)
-    final_pc_mask = pfcs_pc[0, :] >= rsp.ridge_x[1] - p['L_PC']
+    final_pc_mask = pfcs_pc[0, :] >= p['RIDGE_W']/2 - p['L_PC']
     n_final = final_pc_mask.sum()
     
     ## select final time window as approx time for constant speed
     ## propagation to cover one length scale
     speed = (p['RIDGE_W']) / (wdw[1] - wdw[0])
-    t_start = wdw[1] - (p['L_PC'] / speed)
+    t_start = wdw[1] - (C.PPGN_LOOK_BACK * p['L_PC'] / speed)
     t_end = wdw[1]
     t_mask = (t_start <= rsp.ts) & (rsp.ts < t_end)
     
@@ -697,7 +699,7 @@ def copy_final(rsp, wdw, p, C):
     return vs_final[:, x_order_final], spks_final[:, x_order_final]
 
 
-def get_activity(rsp, wdw, p, C):
+def get_activity(rsp, wdw, p, C, P):
     """
     Get ratio of time-averaged firing rate during propagation period to
     PC density (with final units of m^2/s).
@@ -746,7 +748,7 @@ def get_speed(rsp, wdw, C):
     spk_xs = pfcs_pc[0, :][spk_cells]
     
     # fit line to get approximate speed
-    rgr = Lasso()
+    rgr = LinearRegression()
     rgr.fit(spk_ts[:, None], spk_xs)
     
     speed = rgr.coef_[0]

@@ -229,7 +229,7 @@ def sample_v_g(ntwk, p, pre):
     """
     Sample a set of pc voltages and gs_n given w_n_ec_pc and rate_ec.
     """
-    ws_n_pc_ec = np.diagonal(ntwk.ws_up['NMDA'])
+    ws_n_pc_ec = ntwk.ws_up_init['NMDA'].diagonal()
     v_g_n_vs_w_n_pc_ec_rate_ec = pre['v_g_n_vs_w_n_pc_ec_rate_ec']
     
     idxs_w = aux.idx_closest(

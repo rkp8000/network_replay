@@ -13,8 +13,8 @@ SEED_PRE = 0
 
 PATH_W_N_PC_EC_VS_DIST = 'search/pre/ridge/w_n_pc_ec_vs_dist.npy'
 
-DUR_W_PRE = 5
-STIM_W_PRE = (0, 2)
+DUR_W_PRE = 5.
+STIM_W_PRE = (0., 2.)
 N_TRIALS_W_PRE = 200
 DIST_PRE = np.linspace(0, 0.3, 300)
 
@@ -22,8 +22,8 @@ DIST_PRE = np.linspace(0, 0.3, 300)
 
 PATH_V_G_N_VS_W_N_PC_EC_RATE_EC = 'search/pre/ridge/v_g_n_vs_w_n_pc_ec_rate_ec.npy'
 
-DUR_V_G_PRE = 21
-MEASURE_START_V_G_PRE = 1
+DUR_V_G_PRE = 21.
+MEASURE_START_V_G_PRE = 1.
 N_TIMEPOINTS_V_G_PRE = 1000
 
 W_N_PC_EC_PRE = np.linspace(0, 0.002, 200)
@@ -38,13 +38,15 @@ MAX_RUNS_STABILIZE = 10
 
 T_STIM = 0.001  # (s)
 
-MIN_BKGD_PC_FR_SGMS = 3  # minimum stds above bkgd fr to be considered nonzero
-PRPGN_WDW = 0.01  # (s)
+MIN_PC_FR_NZ_SGMS = 3  # minimum stds above bkgd fr to be considered nonzero
+MIN_FR_NZ = 1.  # (Hz)
+PPGN_WDW = 0.002  # (s)
+PPGN_LOOK_BACK = 2.  # 
 
 WAVE_TOL = 0.25
-LOOK_BACK_X = 2
+LOOK_BACK_X = 2.
 
-N_L_PC_FORCE = 2
+N_L_PC_FORCE = 2.
 
 DECAY_CHECK = [(0, .2), (.7, .9)]
 DECAY_MIN = 0.95
