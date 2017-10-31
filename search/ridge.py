@@ -426,14 +426,15 @@ def stabilize(ntwk, p, pre, C, P):
     does not change.
     """
     # sample initial vs and gs and get min nonzero firing rate
-    vs_0, gs_0, fr_nz = sample_v_0_g_0_fr_nz(ntwk, p, C, P)
+    vs_0, gs_0, fr_nz = sample_v_0_g_0_fr_nz(ntwk, p, pre, C, P)
     
     # get x-ordered nrn idxs
     x_order = np.argsort(ntwk.pfcs[0, :])
     
     # estimate max forced spks
     x_max = -(p['RIDGE_W'] / 2) + (C.N_L_PC_FORCE * p['L_PC'])
-    mask_force = ntwk.pfcs[0, :] < x_max
+    mask_force = ~np.isnan(ntwk.pfcs[0, :])
+    mask_force[mask_force] = ntwk.pfcs[0, mask_force] < x_max
     
     idx_stim = int(C.T_STIM / P.DT)
     spks_forced = np.zeros((idx_stim + 1, ntwk.n))
@@ -441,11 +442,17 @@ def stabilize(ntwk, p, pre, C, P):
     
     vs_forced = None
 
+    # make upstream EC spks
+    ts = np.arange(0, C.SMLN_DUR, P.DT)
+    spks_up = np.random.poisson(
+        p['RATE_EC']*P.DT, (len(ts), ntwk.n_ec))
+    
     # loop over repeats until steady state is reached
     rsps = []
+    fr_decay_prev = np.inf
 
     for ctr in range(C.MAX_RUNS_STABILIZE):
-
+        
         # run ntwk with forced spks and vs
         rsp = ntwk.run(
             spks_up, P.DT, vs_0=vs_0, gs_0=gs_0,
@@ -465,13 +472,20 @@ def stabilize(ntwk, p, pre, C, P):
             stability = 0
             break
             
-        # check for activity decay
-        if not check_decay(rsp, wdw_prop, C, P):
+        # get mean PC fr during decay check window
+        fr_decay = get_fr_decay(rsp, wdw_prop, C, P)
+        
+        # check for activity decay since last run
+        if fr_decay < fr_decay_prev * C.DECAY_RATIO:
+            # update reference fr
+            fr_decay_prev = fr_decay
+        else:
+            # declare ntwk stable
             stability = 1
             break
             
         # copy final vs and spks
-        vs_final, spks_final = copy_final(rsp, wdw_prop, C, P)
+        vs_final, spks_final = copy_final(rsp, wdw_prop, p, C)
         
         # create vs/spks forcing matrices from finals for next run
         n_forced = vs_final.shape[1]
@@ -491,8 +505,8 @@ def stabilize(ntwk, p, pre, C, P):
         stability = 1
         
     if not stability:
-        activity = 0
-        speed = 0
+        activity = 0.
+        speed = 0.
     else:
         # get activity and speed of final ntwk response
         activity = get_activity(rsp, wdw_prop, p, C, P)
@@ -602,35 +616,24 @@ def check_propagation(rsp, fr_nz, p, C, P):
         return wdw
     else:
         return None
+
     
-    
-def check_decay(rsp, wdw, C, P):
+def get_fr_decay(rsp, wdw, C, P):
     """
-    Return whether response decays from start to end of activity propagation
-    over given window.
+    Get firing rate over decay window in C.
     
-    :param rsp: ntwk response object
-    :param wdw: (start, end) of propagation epoch
+    :param rsp: ntwk response object with cell_types attribute
+    :param wdw: (start, end) times (in s) of propagation epoch
     """
-    # convert relative decay check times to absolute
     dur = wdw[1] - wdw[0]
     
-    start_0 = wdw[0] + C.DECAY_CHECK[0][0] * dur
-    end_0 = wdw[0] + C.DECAY_CHECK[0][1] * dur
+    start = wdw[0] + C.DECAY_WDW[0] * dur
+    end = wdw[0] + C.DECAY_WDW[1] * dur
     
-    start_1 = wdw[0] + C.DECAY_CHECK[1][0] * dur
-    end_1 = wdw[0] + C.DECAY_CHECK[1][1] * dur
-    
-    # get mean firing rate over first window
-    mask_0 = (start_0 <= rsp.ts) & (rsp.ts < end_0)
-    fr_0 = np.mean(rsp.spks[mask_0] / P.DT)
-    
-    # get mean firing rate over second window
-    mask_1 = (start_1 <= rsp.ts) & (rsp.ts < end_1)
-    fr_1 = np.mean(rsp.spks[mask_1] / P.DT)
-    
-    # check whether fr_1 is sufficiently below decay tolerance
-    return fr_1 < (C.DECAY_MIN * fr_0)
+    t_mask_decay = (start <= rsp.ts) & (rsp.ts < end)
+    pc_mask = rsp.cell_types == 'PC'
+
+    return rsp.spks[t_mask_decay, :][:, pc_mask].mean()
 
 
 def copy_final(rsp, wdw, p, C):
@@ -681,8 +684,8 @@ def copy_final(rsp, wdw, p, C):
     
     # let t_2 be final time of wave and t_1 be time of first in-wave
     # spk from any cell between x_1 and x_2
-    t_2 = t_end
-    t_1 = spk_ts[(x_1 <= spk_xs) & (spk_xs < x_2) & in_wave]
+    t_2 = spk_ts[in_wave].max()
+    t_1 = spk_ts[(x_1 <= spk_xs) & (spk_xs < x_2) & in_wave].min()
 
     # make cell and time mask
     pc_mask_final = (x_1 <= pfcs_pc[0, :]) & (pfcs_pc[0, :] < x_2)
@@ -710,8 +713,8 @@ def get_activity(rsp, wdw, p, C, P):
     # convert activity measurement times to absolute
     dur = wdw[1] - wdw[0]
     
-    start = wdw[0] + C.ACTIVITY_READ[0] * dur
-    end = wdw[0] + C.ACTIVITY_READ[1] * dur
+    start = wdw[0] + C.ACTIVITY_WDW[0] * dur
+    end = wdw[0] + C.ACTIVITY_WDW[1] * dur
     
     # get pop. firing rate in window
     mask = (start <= rsp.ts) * (rsp.ts < end)
@@ -736,8 +739,8 @@ def get_speed(rsp, wdw, C):
     # convert speed measurement times to absolute
     dur = wdw[1] - wdw[0]
     
-    start = wdw[0] + C.SPEED_READ[0] * dur
-    end = wdw[0] + C.SPEED_READ[1] * dur
+    start = wdw[0] + C.SPEED_WDW[0] * dur
+    end = wdw[0] + C.SPEED_WDW[1] * dur
     
     t_mask = (start <= rsp.ts) & (rsp.ts < end)
     

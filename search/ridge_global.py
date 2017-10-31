@@ -48,11 +48,11 @@ LOOK_BACK_X = 2.
 
 N_L_PC_FORCE = 2.
 
-DECAY_CHECK = [(0, .2), (.7, .9)]
-DECAY_MIN = 0.95
+DECAY_WDW = (.5, .9)
+DECAY_RATIO = 0.95
 
-ACTIVITY_READ = (.1, .9)
-SPEED_READ = (.1, .9)
+ACTIVITY_WDW = (.1, .9)
+SPEED_WDW = (.1, .9)
 
 
 # SEARCH CONFIG
