@@ -58,7 +58,7 @@ T_R = 0.002  # (s)
 
 E_AHP_PC = -0.07  # (V)
 T_AHP_PC = 0.05  # (s)
-W_AHP_PC = 1
+W_AHP_PC = 0.5
 
 W_AHP_INH = 0
 
