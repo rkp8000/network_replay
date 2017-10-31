@@ -95,7 +95,7 @@ def search(
     forces_left = 0
     
     # loop over search iterations
-    for ctr in range(max_iter):
+    for ctr in range(C.MAX_SEARCH_ITER):
         
         # attempt iteration
         try:

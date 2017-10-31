@@ -51,6 +51,6 @@ class RidgeTrial(Base):
     fr_ec = Column(Float)
     
     # results
-    propagation = Column(Float)
+    stability = Column(Float)
     activity = Column(Float)
     speed = Column(Float)
