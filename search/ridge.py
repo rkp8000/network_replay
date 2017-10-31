@@ -291,7 +291,7 @@ def read_search_error(searcher_id):
 
 # RIDGE-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPERS
 
-def ntwk_obj(seed, p, pre, C, P, test=False):
+def ntwk_obj(p, pre, C, P, seed, test=False):
 
     np.random.seed(seed)
     
@@ -302,7 +302,7 @@ def ntwk_obj(seed, p, pre, C, P, test=False):
     
     rsps = []
     
-    for n_ctr in range(n_ntwks):
+    for n_ctr in range(C.N_NTWKS):
         
         # make ntwk
         ntwk = p_to_ntwk(p, pre, P)
@@ -324,7 +324,10 @@ def ntwk_obj(seed, p, pre, C, P, test=False):
         'SPEED': np.mean(speeds)
     }
     
-    return rslts if not test else rslts, rsps_bkgd, rsps
+    if test:
+        return rslts, rsps
+    else:
+        return rslts
 
 
 def p_to_ntwk(p, pre, P):
