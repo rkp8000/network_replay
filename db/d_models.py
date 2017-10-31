@@ -48,7 +48,7 @@ class RidgeTrial(Base):
     p_g_pc_inh = Column(Float)
     w_g_pc_inh = Column(Float)
     
-    rate_ec = Column(Float)
+    fr_ec = Column(Float)
     
     # results
     propagation = Column(Float)

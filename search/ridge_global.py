@@ -18,16 +18,16 @@ STIM_W_PRE = (0., 2.)
 N_TRIALS_W_PRE = 200
 DIST_PRE = np.linspace(0, 0.3, 300)
 
-## V, G_N VS W_N_PC_EC, RATE_EC COMPUTATION
+## V, G_N VS W_N_PC_EC, FR_EC COMPUTATION
 
-PATH_V_G_N_VS_W_N_PC_EC_RATE_EC = 'search/pre/ridge/v_g_n_vs_w_n_pc_ec_rate_ec.npy'
+PATH_V_G_N_VS_W_N_PC_EC_FR_EC = 'search/pre/ridge/v_g_n_vs_w_n_pc_ec_fr_ec.npy'
 
 DUR_V_G_PRE = 21.
 MEASURE_START_V_G_PRE = 1.
 N_TIMEPOINTS_V_G_PRE = 1000
 
 W_N_PC_EC_PRE = np.linspace(0, 0.002, 200)
-RATE_EC_PRE = np.linspace(20, 70, 100)
+FR_EC_PRE = np.linspace(20, 70, 100)
 
 
 # OBJECTIVE FUNCTION CONFIG

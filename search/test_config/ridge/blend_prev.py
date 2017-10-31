@@ -5,7 +5,7 @@ START = {
     'Z_PC': 2, 'L_PC': 1, 'W_A_PC_PC': 2,
     'P_A_INH_PC': 1, 'W_A_INH_PC': 2,
     'P_G_PC_INH': 3, 'W_G_PC_INH': 5,
-    'RATE_EC': 9,
+    'FR_EC': 9,
 }
 
 # ranges can be:
@@ -30,7 +30,7 @@ P_RANGES = (
     ('P_G_PC_INH', [3]),
     ('W_G_PC_INH', [5]),
 
-    ('RATE_EC', [9]),
+    ('FR_EC', [9]),
 )
 
 Q_JUMP = 0.01

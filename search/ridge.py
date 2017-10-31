@@ -451,7 +451,7 @@ def stabilize(ntwk, p, pre, C, P, test=False):
     # make upstream EC spks
     ts = np.arange(0, C.SMLN_DUR, P.DT)
     spks_up = np.random.poisson(
-        p['RATE_EC']*P.DT, (len(ts), ntwk.n_ec))
+        p['FR_EC']*P.DT, (len(ts), ntwk.n_ec))
     
     # loop over repeats until steady state is reached
     rsps = []
@@ -543,7 +543,7 @@ def sample_v_0_g_0_fr_nz(ntwk, p, pre, C, P, test=False):
     
     ts = np.arange(0, C.SMLN_DUR, P.DT)
 
-    spks_up = np.random.poisson(p['RATE_EC'] * P.DT, (len(ts), ntwk.n_ec))
+    spks_up = np.random.poisson(p['FR_EC'] * P.DT, (len(ts), ntwk.n_ec))
 
     ## run ntwk
     rsp_bkgd = ntwk.run(spks_up, P.DT, vs_0=vs_0, gs_0=gs_0)
@@ -801,7 +801,7 @@ def validate(cfg, ctr):
         
     required = [
         'RIDGE_H', 'RIDGE_W', 'P_INH', 'RHO_PC', 'Z_PC', 'L_PC', 'W_A_PC_PC',
-        'P_A_INH_PC', 'W_A_INH_PC', 'P_G_PC_INH', 'W_G_PC_INH', 'RATE_EC'
+        'P_A_INH_PC', 'W_A_INH_PC', 'P_G_PC_INH', 'W_G_PC_INH', 'FR_EC'
     ]
     
     keys = [p_range[0] for p_range in cfg.P_RANGES]
@@ -816,7 +816,7 @@ def validate(cfg, ctr):
     
     for key, p_range in cfg.P_RANGES:
         if not isinstance(p_range, list) or (len(p_range) not in [1, 3]):
-            raise Exception('"{}" range must be 1- or 3-element tuple.'.format(key))
+            raise Exception('"{}" range must be 1- or 3-elmnt tuple.'.format(key))
         if len(p_range) == 3 and (p_range[1] <= p_range[0]):
             raise Exception('UB must exceed LB for "{}" range.'.format(key))
     
@@ -897,7 +897,7 @@ def trial_to_p(trial):
         'P_G_PC_INH': trial.p_g_pc_inh,
         'W_G_PC_INH': trial.w_g_pc_inh,
         
-        'W_RATE_EC': trial.rate_ec,
+        'FR_EC': trial.fr_ec,
     }
 
 
@@ -1156,7 +1156,7 @@ def save_ridge_trial(session, searcher, seed, p, rslt):
         p_g_pc_inh=p['P_G_PC_INH'],
         w_g_pc_inh=p['W_G_PC_INH'],
         
-        rate_ec=p['RATE_EC'],
+        fr_ec=p['FR_EC'],
         
         stability=rslt['STABILITY'],
         activity=rslt['ACTIVITY'],

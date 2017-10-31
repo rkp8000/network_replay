@@ -102,10 +102,10 @@ def w_n_pc_ec_vs_dist(C, P):
     return fig
         
 
-def v_g_n_vs_w_n_pc_ec_rate_ec(C, P, cmap='hot'):
+def v_g_n_vs_w_n_pc_ec_fr_ec(C, P, cmap='hot'):
     """
     Compute and save steady-state v and g_n distributions
-    as function of w_n_pc_ec and rate_ec.
+    as function of w_n_pc_ec and fr_ec.
     """
     np.random.seed(C.SEED_PRE)
     n = len(C.W_N_PC_EC_PRE)
@@ -126,17 +126,17 @@ def v_g_n_vs_w_n_pc_ec_rate_ec(C, P, cmap='hot'):
     
     shape = (
         len(C.W_N_PC_EC_PRE),
-        len(C.RATE_EC_PRE),
+        len(C.FR_EC_PRE),
         C.N_TIMEPOINTS_V_G_PRE,
     )
     
     vs = np.nan * np.zeros(shape)
     gs_n = np.nan * np.zeros(shape)
     
-    for ctr_r, rate_ec in enumerate(C.RATE_EC_PRE):
+    for ctr_r, fr_ec in enumerate(C.FR_EC_PRE):
         
         # build upstream spks and run ntwk
-        spks_up = np.random.poisson(P.DT * rate_ec, (len(ts), n))
+        spks_up = np.random.poisson(P.DT * fr_ec, (len(ts), n))
         rsp = ntwk.run(spks_up, P.DT)
         
         # loop over neurons i.e. ws_n_pc_ec
@@ -154,17 +154,17 @@ def v_g_n_vs_w_n_pc_ec_rate_ec(C, P, cmap='hot'):
             
     # save results
     save_path = aux.save(
-        C.PATH_V_G_N_VS_W_N_PC_EC_RATE_EC,
+        C.PATH_V_G_N_VS_W_N_PC_EC_FR_EC,
         {
             'w_n_pc_ec': C.W_N_PC_EC_PRE,
-            'rate_ec': C.RATE_EC_PRE,
+            'fr_ec': C.FR_EC_PRE,
             'v': vs, 'g_n': gs_n
         })
     
-    print('v, g_n vs w_n_pc_ec, rate_ec saved at "{}".'.format(save_path))
+    print('v, g_n vs w_n_pc_ec, fr_ec saved at "{}".'.format(save_path))
     
     # plot results
-    w_, rate_ = np.meshgrid(C.W_N_PC_EC_PRE, C.RATE_EC_PRE, indexing='ij')
+    w_, rate_ = np.meshgrid(C.W_N_PC_EC_PRE, C.FR_EC_PRE, indexing='ij')
     
     v_means = vs.mean(-1)
     v_stds = vs.std(-1)
@@ -174,25 +174,25 @@ def v_g_n_vs_w_n_pc_ec_rate_ec(C, P, cmap='hot'):
     
     fig, axs = plt.subplots(1, 4, figsize=(15, 4), tight_layout=True)
     
-    # mean v vs w_n_pc_ec, rate_ec
+    # mean v vs w_n_pc_ec, fr_ec
     axs[0].scatter(
         w_.flatten(), rate_.flatten(), c=v_means.flatten(),
         s=10, lw=0, vmin=v_means.min(), vmax=v_means.max(), cmap=cmap)
     axs[0].set_title('Mean PC voltage')
     
-    # std v vs w_n_pc_ec, rate_ec
+    # std v vs w_n_pc_ec, fr_ec
     axs[1].scatter(
         w_.flatten(), rate_.flatten(), c=v_stds.flatten(),
         s=10, lw=0, vmin=v_stds.min(), vmax=v_stds.max(), cmap=cmap)
     axs[1].set_title('Std of PC voltage')
     
-    # mean g_n vs w_n_pc_ec, rate_ec
+    # mean g_n vs w_n_pc_ec, fr_ec
     axs[2].scatter(
         w_.flatten(), rate_.flatten(), c=g_n_means.flatten(),
         s=10, lw=0, vmin=g_n_means.min(), vmax=g_n_means.max(), cmap=cmap)
     axs[2].set_title('Mean EC->PC G_N')
     
-    # std g_n vs w_n_pc_ec, rate_ec
+    # std g_n vs w_n_pc_ec, fr_ec
     axs[3].scatter(
         w_.flatten(), rate_.flatten(), c=g_n_stds.flatten(),
         s=10, lw=0, vmin=g_n_stds.min(), vmax=g_n_stds.max(), cmap=cmap)
@@ -207,7 +207,7 @@ def v_g_n_vs_w_n_pc_ec_rate_ec(C, P, cmap='hot'):
         
         ax.set_xticks([w_min, w_max])
         ax.set_xlabel('w_n_pc_ec')
-        ax.set_ylabel('rate_ec (Hz)')
+        ax.set_ylabel('fr_ec (Hz)')
         
         set_font_size(ax, 16)
         
@@ -227,21 +227,21 @@ def sample_w_n_pc_ec(dists, pre):
 
 def sample_v_g(ntwk, p, pre):
     """
-    Sample a set of pc voltages and gs_n given w_n_ec_pc and rate_ec.
+    Sample a set of pc voltages and gs_n given w_n_ec_pc and fr_ec.
     """
     ws_n_pc_ec = ntwk.ws_up_init['NMDA'].diagonal()
-    v_g_n_vs_w_n_pc_ec_rate_ec = pre['v_g_n_vs_w_n_pc_ec_rate_ec']
+    v_g_n_vs_w_n_pc_ec_fr_ec = pre['v_g_n_vs_w_n_pc_ec_fr_ec']
     
     idxs_w = aux.idx_closest(
-        ws_n_pc_ec, v_g_n_vs_w_n_pc_ec_rate_ec['w_n_pc_ec'])
+        ws_n_pc_ec, v_g_n_vs_w_n_pc_ec_fr_ec['w_n_pc_ec'])
     
     idxs_r = aux.idx_closest(
-        p['RATE_EC'], v_g_n_vs_w_n_pc_ec_rate_ec['rate_ec'])
+        p['FR_EC'], v_g_n_vs_w_n_pc_ec_fr_ec['fr_ec'])
     
     idxs_rand = np.random.randint(
-        0, v_g_n_vs_w_n_pc_ec_rate_ec['v'].shape[-1], len(ws_n_pc_ec))
+        0, v_g_n_vs_w_n_pc_ec_fr_ec['v'].shape[-1], len(ws_n_pc_ec))
     
-    vs = v_g_n_vs_w_n_pc_ec_rate_ec['v'][idxs_w, idxs_r, idxs_rand]
-    gs_n = v_g_n_vs_w_n_pc_ec_rate_ec['g_n'][idxs_w, idxs_r, idxs_rand]
+    vs = v_g_n_vs_w_n_pc_ec_fr_ec['v'][idxs_w, idxs_r, idxs_rand]
+    gs_n = v_g_n_vs_w_n_pc_ec_fr_ec['g_n'][idxs_w, idxs_r, idxs_rand]
     
     return vs, gs_n
