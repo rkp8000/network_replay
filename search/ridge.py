@@ -317,12 +317,18 @@ def ntwk_obj(p, pre, C, P, seed, test=False):
         
         if test:
             rsps.append(rsps_)
-        
-    rslts = {
-        'STABILITY': np.mean(stabilities),
-        'ACTIVITY': np.mean(activities),
-        'SPEED': np.mean(speeds)
-    }
+    
+    # average activity/speed over stable runs
+    mask = stabilities == 1
+    
+    if mask.sum():
+        rslts = {
+            'STABILITY': np.mean(stabilities[mask]),
+            'ACTIVITY': np.mean(activities[mask]),
+            'SPEED': np.mean(speeds[mask])
+        }
+    else:
+        rslts = {'STABILITY': 0., 'ACTIVITY': 0., 'SPEED': 0.}
     
     if test:
         return rslts, rsps
