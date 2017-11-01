@@ -88,7 +88,7 @@ Q_JUMP = 0.01
 
 Q_NEW = 0.8
 
-SGM_RAND = 0.1
+SGM_RAND = 0.2
 
 A_PREV = 1
 B_PREV_Y = 1
