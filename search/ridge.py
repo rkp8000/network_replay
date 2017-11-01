@@ -385,8 +385,9 @@ def p_to_ntwk(p, pre, P):
         v_th=cc([np.repeat(P.V_TH_PC, n_pc), np.repeat(P.V_TH_INH, n_inh)]),
         v_reset=cc([
             np.repeat(P.V_RESET_PC, n_pc), np.repeat(P.V_RESET_INH, n_inh)]),
+        t_r=cc([np.repeat(P.T_R_PC, n_pc), np.repeat(P.T_R_INH, n_inh)]),
         
-        t_r=P.T_R, e_ahp=P.E_AHP_PC, t_ahp=P.T_AHP_PC,
+        e_ahp=P.E_AHP_PC, t_ahp=P.T_AHP_PC,
         w_ahp=cc([np.repeat(P.W_AHP_PC, n_pc), np.repeat(P.W_AHP_INH, n_inh)]),
         
         es_syn={'AMPA': P.E_A, 'NMDA': P.E_N, 'GABA': P.E_G},

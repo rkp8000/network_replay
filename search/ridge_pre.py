@@ -47,7 +47,7 @@ def w_n_pc_ec_vs_dist(C, P):
     
     ntwk = LIFNtwk(
         t_m=P.T_M_PC, e_l=P.E_L_PC, v_th=P.V_TH_PC,
-        v_reset=P.V_RESET_PC, t_r=P.T_R,
+        v_reset=P.V_RESET_PC, t_r=np.repeat(P.T_R_PC, n),
         e_ahp=P.E_AHP_PC, t_ahp=np.inf, w_ahp=0,
         es_syn={'AMPA': P.E_A, 'NMDA': P.E_N},
         ts_syn={'AMPA': P.T_A, 'NMDA': P.T_N},
@@ -116,7 +116,7 @@ def v_g_n_vs_w_n_pc_ec_fr_ec(C, P, cmap='hot'):
     
     ntwk = LIFNtwk(
         t_m=P.T_M_PC, e_l=P.E_L_PC, v_th=P.V_TH_PC,
-        v_reset=P.V_RESET_PC, t_r=P.T_R,
+        v_reset=P.V_RESET_PC, t_r=np.repeat(P.T_R_PC, n),
         e_ahp=0, t_ahp=np.inf, w_ahp=0,
         es_syn={'NMDA': P.E_N}, ts_syn={'NMDA': P.T_N},
         ws_up=ws_up, ws_rcr=ws_rcr)
