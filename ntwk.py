@@ -372,7 +372,7 @@ class LIFNtwk(object):
             vs[step][spks[step]] = self.v_reset[spks[step]]
             
             # set refractory counters for spiking neurons
-            rp_ctrs[spks[step]] = self.t_r
+            rp_ctrs[spks[step]] = self.t_r[spks[step]]
             # decrement refractory counters for all neurons
             rp_ctrs -= dt
             # adjust negative refractory counters up to zero
