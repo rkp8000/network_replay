@@ -296,9 +296,9 @@ def ntwk_obj(p, pre, C, P, seed, test=False):
     np.random.seed(seed)
     
     # loop over ntwks
-    stabilities = []
-    activities = []
-    speeds = []
+    stabilities = np.nan * np.zeros(C.N_NTWKS)
+    activities = np.nan * np.zeros(C.N_NTWKS)
+    speeds = np.nan * np.zeros(C.N_NTWKS)
     
     rsps = []
     
@@ -311,9 +311,9 @@ def ntwk_obj(p, pre, C, P, seed, test=False):
         rsps_, stability, activity, speed = stabilize(ntwk, p, pre, C, P)
         
         # store results
-        stabilities.append(stability)
-        activities.append(activity)
-        speeds.append(speed)
+        stabilities[n_ctr] = stability
+        activities[n_ctr] = activity
+        speeds[n_ctr] = speed
         
         if test:
             rsps.append(rsps_)
