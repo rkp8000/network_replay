@@ -34,7 +34,7 @@ def launch_searchers(role, obj, C, n, seed=None, commit=None):
         # define argument-less target function
         def targ(): 
             return search(
-                role, obj, global_config, seed=seed, commit=commit)
+                role, obj, C, seed=seed, commit=commit)
         
         # launch searcher thread
         thread = threading.Thread(target=targ)
