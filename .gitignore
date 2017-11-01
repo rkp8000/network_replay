@@ -16,6 +16,8 @@ test_anim/
 
 LOCAL.py
 
-search/config/*
+search/config/*/*
 search/pre/*
+
+!search/config/*/test*
 
