@@ -1,4 +1,4 @@
-SMLN_ID = 'sim_0'
+SMLN_ID = 'smln_0'
 
 START = {
     'RIDGE_H': 0.25, 'RIDGE_W': 4, 'P_INH': 0.1, 'RHO_PC': 1000, 

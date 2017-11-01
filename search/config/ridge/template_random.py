@@ -1,4 +1,4 @@
-SMLN_ID = 'sim_0'
+SMLN_ID = 'smln_0'
 
 START = 'random'
 
