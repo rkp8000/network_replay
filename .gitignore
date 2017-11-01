@@ -19,5 +19,6 @@ LOCAL.py
 search/config/*/*
 search/pre/*
 
-!search/config/*/test*
+!search/config/*/test_*
+!search/config/*/template_*
 
