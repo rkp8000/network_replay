@@ -108,4 +108,4 @@ def raster(
         
         set_font_size(ax, 16)
         
-    return fig, axs, rsps_final
+    return fig, axs, rslts, rsps_final
