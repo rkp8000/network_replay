@@ -12,7 +12,7 @@ from plot import set_font_size
 
 
 def raster(
-        trial, ax_height=6, colors=(('PC', 'k'), ('INH', 'r')),
+        trial, pre, C, P, ax_height=6, colors=(('PC', 'k'), ('INH', 'r')),
         show_all_rsps=False, **scatter_kwargs):
     """
     Display a raster plot for each of the ntwk responses used in a given trial.
@@ -45,7 +45,7 @@ def raster(
     p = ridge.trial_to_p(trial)
     
     # run ntwk obj function
-    rslts, rsps = ridge.ntwk_obj(p=p, seed=trial.seed, return_rsps=True)
+    rslts, rsps = ridge.ntwk_obj(p, pre, C, P, trial.seed, test=True)
     
     # get final rsps for each ntwk
     if show_all_rsps:
@@ -72,7 +72,8 @@ def raster(
     n = len(rsps_final)
     
     fig_size = (15, ax_height*n)
-    fig, axs = plt.subplots(n, 1, tight_layout=True, squeeze=False)
+    fig, axs = plt.subplots(
+        n, 1, figsize=fig_size, tight_layout=True, squeeze=False)
     axs = axs[:, 0]
     
     for rsp, title, ax in zip(rsps_final, titles, axs):
@@ -107,4 +108,4 @@ def raster(
         
         set_font_size(ax, 16)
         
-    return rsps_final
+    return fig, axs, rsps_final
