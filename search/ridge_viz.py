@@ -3,11 +3,16 @@ Code for visualizing search results.
 """
 from copy import deepcopy
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+import os
 import numpy as np
 import pandas as pd
 from sqlalchemy.sql.expression import func
 
-from . import ridge
+import aux
+from anim import build_frames, create_mp4
+from anim import random_oval
+from search import ridge
 from db import make_session, d_models
 from plot import raster as _raster
 from plot import set_font_size
@@ -210,3 +215,78 @@ def raster(
         set_font_size(ax, 16)
         
     return fig, axs, rslts, rsps_final
+
+
+def animate(save_dir, trial_id, run, pre, C, P, report_every=60):
+    """
+    Animate the activity of a ridge trial.
+    
+    :param run: index of run to animate (since trials comprise multiple runs)
+    """
+    mpl.rcParams['agg.path.chunksize'] = 10000
+    
+    # get trial params
+    session = make_session()
+    trial = session.query(d_models.RidgeTrial).get(trial_id)
+    p = ridge.trial_to_p(trial)
+    session.close()
+    
+    print('\nRunning network simulations...')
+    rslts, rsps = ridge.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    rsp = rsps[run][-1]
+    print('Results: ')
+    print(rslts)
+    
+    print('\nSaving response file...')
+    ntwk_path = rsp.save(
+        os.path.join(save_dir, 'ntwk-{}-{}.npy'.format(trial_id, run)))
+    
+    # set cell positions
+    positions = rsp.pfcs.copy()
+    inh_mask = rsp.cell_types == 'INH'
+    
+    # random points on circle
+    pos_mean_inh = (0, -2*p['RIDGE_H'])
+    pos_rad_inh = (2*p['RIDGE_H'], p['RIDGE_H'])
+    
+    positions[:, inh_mask] = random_oval(
+        pos_mean_inh, pos_rad_inh, inh_mask.sum()).T
+    
+    print('\nBuilding frames...\n')
+    frame_prfx = os.path.join(save_dir, 'frames-{}-{}'.format(trial_id, run), 'f-')
+    frames = build_frames.ntwk(
+        save_prfx=frame_prfx,
+        ntwk_file=ntwk_path,
+        fps=1000,
+        box=[
+            -1.05 * p['RIDGE_W']/2, 1.05 * p['RIDGE_W']/2,
+            -3.05 * p['RIDGE_H'], 1.05 * p['RIDGE_H']/2,
+        ],
+        resting_size=30,
+        spk_size=300,
+        amp=3,
+        positions=positions,
+        default_color={'PC': 'k', 'INH': 'g'},
+        cxn_color={
+            ('PC', 'PC'): 'k', ('INH', 'PC'): 'k',
+            ('PC', 'INH'): 'b', ('INH', 'INH'): 'b'
+        },
+        cxn_lw={
+            ('PC', 'PC'): .05, ('INH', 'PC'): .01,
+            ('PC', 'INH'): .01, ('INH', 'INH'): 0
+        },
+        cxn_zorder={
+            ('PC', 'PC'): 1, ('INH', 'PC'): 0,
+            ('PC', 'INH'): 0, ('INH', 'INH'): 0
+        },
+        frames_per_spk=2,
+        title='Trial {}:{}'.format(trial_id, run),
+        x_label='pfc_x (m)',
+        y_label='pfc_y (m)',
+        fig_size=(15, 7.5),
+        verbose=True,
+        report_every=report_every)
+    
+    print('\nMaking animation...\n')
+    mp4_path = os.path.join(save_dir, 'ntwk-{}-{}'.format(trial_id, run))
+    create_mp4(frames, mp4_path, playback_fps=30, verbose=True)
