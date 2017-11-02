@@ -441,7 +441,8 @@ def update_plastic_weights(cs, ws_prev, c_s, beta_c, t_w, w_ec_ca3_max, dt):
     :param dt: numerical integration time step
     """
     if cs.shape != ws_prev.shape:
-        raise ValueError('Spk-ctr "cs" and plastic weights "ws_prev" must have same shape.')
+        raise ValueError(
+            'Spk-ctr "cs" and plastic weights "ws_prev" must have same shape.')
         
     dw = z(cs, c_s, beta_c) * (w_ec_ca3_max - ws_prev) * dt / t_w 
     return ws_prev + dw
@@ -489,6 +490,9 @@ class NtwkResponse(object):
         self.ws_plastic = ws_plastic
         self.masks_plastic = masks_plastic
         self.pfcs = pfcs
+        
+        self.dt = np.mean(np.diff(ts))
+        self.fs = 1 / self.dt
 
     def save(self, save_file, save_gs=False, save_ws=True, save_place_fields=True):
         """
@@ -500,6 +504,7 @@ class NtwkResponse(object):
         :param save_positions: whether to save positions
         """
         data = {
+            'ts': self.ts,
             'vs': self.vs,
             'spks': self.spks,
             'v_rest': self.v_rest,
@@ -519,6 +524,9 @@ class NtwkResponse(object):
 
         if save_place_fields:
             data['pfcs'] = self.pfcs
+        
+        data['dt'] = self.dt
+        data['fs'] = self.fs
 
         return save(save_file, data)
     
