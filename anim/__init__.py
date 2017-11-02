@@ -4,16 +4,19 @@ import os
 from PIL import Image
 
 
-def merge_frames(frame_sets, save_prefix, rects, size, size_rel_to=1, delete_originals=False, verbose=False):
+def merge_frames(
+        frame_sets, save_prefix, rects, size,
+        size_rel_to=1, delete_originals=False, verbose=False):
     """
     Create merged frames from multiple sets of frames.
     
     :param frame_sets: list of sets of frames to merge
     :param save_prefix: filename prefix for each saved merged frame
-    :param rects: list of rectangular locations [(left, upper, right, lower), ...] for
+    :param rects: list of rectangular locs [(left, upper, right, lower), ...] for
         sub-images, with (0, 0) in upper left (relative to the image size)
     :param size: size of final image (relative to size of first frame set)
-    :param size_rel_to: change for "size" argument to be relative to a different frame set
+    :param size_rel_to: change for "size" argument to be relative to a
+        different frame set
     :param delete_originals: whether to delete files used to make original gif
     :param verbose: whether to print out progress
     """
@@ -23,7 +26,8 @@ def merge_frames(frame_sets, save_prefix, rects, size, size_rel_to=1, delete_ori
         raise ValueError('All frame sets must have same number of frames.')
     
     if len(frame_sets) != len(rects):
-        raise ValueError('Each frame set must have exactly one corresponding rect.')
+        raise ValueError(
+            'Each frame set must have exactly one corresponding rect.')
     
     # convert rects and size to pixels
     imgs_0 = [Image.open(fs[0]) for fs in frame_sets]
@@ -39,7 +43,10 @@ def merge_frames(frame_sets, save_prefix, rects, size, size_rel_to=1, delete_ori
         
         rects_px.append((left, upper, right, lower))
         
-    size_px = (size[0]*sizes_orig[size_rel_to][0], size[1]*sizes_orig[size_rel_to][1])
+    size_px = (
+        size[0]*sizes_orig[size_rel_to][0],
+        size[1]*sizes_orig[size_rel_to][1]
+    )
         
     for rect_px in rects_px:
         if not rect_px[0] < rect_px[2]:
@@ -51,7 +58,10 @@ def merge_frames(frame_sets, save_prefix, rects, size, size_rel_to=1, delete_ori
             or (not size_px[1] >= np.max([rect_px[3] for rect_px in rects_px])):
         raise ValueError('Merged frame size must be larger than sub-image size.')
         
-    sub_sizes = [(rect_px[2]-rect_px[0], rect_px[3]-rect_px[1]) for rect_px in rects_px]
+    sub_sizes = [
+        (rect_px[2]-rect_px[0], rect_px[3]-rect_px[1])
+        for rect_px in rects_px
+    ]
     
     # make sure save directory exists
     save_dir = os.path.dirname(save_prefix)
@@ -85,7 +95,8 @@ def merge_frames(frame_sets, save_prefix, rects, size, size_rel_to=1, delete_ori
     return save_files
     
 
-def create_mp4(files, save_file, playback_fps, delete_originals=False, verbose=False):
+def create_mp4(
+        files, save_file, playback_fps, delete_originals=False, verbose=False):
     """
     Create an MP4 movie from a sequence of image files.
     
@@ -128,3 +139,24 @@ def create_mp4(files, save_file, playback_fps, delete_originals=False, verbose=F
             print('Originals deleted.')
             
     return save_file + '.mp4'
+
+
+# AUXILIARY FUNCTIONS
+def random_oval(cent, rad, n):
+    """
+    Generate n points uniformly distributed within an oval.
+    
+    :param cent: (center x, center y)
+    :param rad: (radius x, radius y)
+    :param n: number of points to sample
+    """
+    t = 2 * np.pi * np.random.rand(n)
+    u = np.random.rand(n) + np.random.rand(n)
+    r = np.nan * np.zeros(n)
+    r[u < 1] = u[u < 1]
+    r[u >= 1] = 2 - u[u >= 1]
+    
+    x = cent[0] + (rad[0] * r * np.cos(t))
+    y = cent[1] + (rad[1] * r * np.sin(t))
+    
+    return np.array([x, y]).T
