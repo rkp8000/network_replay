@@ -4,11 +4,112 @@ Code for visualizing search results.
 from copy import deepcopy
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+from sqlalchemy.sql.expression import func
 
 from . import ridge
 from db import make_session, d_models
 from plot import raster as _raster
 from plot import set_font_size
+
+
+def rslt_scatter(smln_id, filt, lmt=None, fig_size=(10, 10), **scatter_kwargs):
+    """
+    Make a scatter plot of activity and speed values for a set of
+    ridge trials.
+    
+    :param smln_id: simulation id to get trials for
+    :param filt: list of sqlalchemy filters to apply
+    :param max_trials: max number of trials
+    """
+    
+    session = make_session()
+    
+    trials = session.query(
+        d_models.RidgeTrial.activity,
+        d_models.RidgeTrial.speed).join(
+        d_models.RidgeSearcher).filter(
+        d_models.RidgeSearcher.smln_id == smln_id,
+        *filt).limit(lmt)
+    
+    session.close()
+    
+    activities, speeds = np.array(trials.all()).T
+    
+    fig, ax = plt.subplots(1, 1, figsize=fig_size, tight_layout=True)
+    ax.scatter(activities, speeds, **scatter_kwargs)
+    
+    ax.set_xlim(left=0)
+    ax.set_ylim(bottom=0)
+    
+    ax.set_xlabel('Activity (m^2/s)')
+    ax.set_ylabel('Speed (m/s)')
+    
+    set_font_size(ax, 16)
+    
+    return ax
+
+
+def select_trials(smln_id, filt, order_by=None, lmt=None, df=True):
+    """
+    Select a specific subset of ridge trials from the db.
+    
+    :param filt: list of sqlalchemy filters to apply
+    """
+    session = make_session()
+    
+    if order_by == 'rand':
+        order_by = func.random()
+    
+    trials = session.query(d_models.RidgeTrial).join(
+        d_models.RidgeSearcher).filter(
+        d_models.RidgeSearcher.smln_id == smln_id,
+        *filt).order_by(order_by).limit(lmt)
+    
+    session.close()
+    
+    if df:
+        return pd.read_sql(trials.statement, trials.session.bind)
+    else:
+        return trials
+    
+
+def trial_set_scatter(
+        smln_id, filts, cs, lmt=10000,
+        params=(
+            'P_INH', 'RHO_PC', 'Z_PC', 'L_PC', 'W_A_PC_PC', 'P_A_INH_PC',
+            'W_A_INH_PC', 'P_G_PC_INH', 'W_G_PC_INH', 'FR_EC'),
+        n_col=2, seed=0, **kwargs):
+    """
+    Select trial sets according to set of filters and plot
+    scatter plots of parameters in different colors.
+    """
+    np.random.seed(0)
+    
+    row_height = 1 + .3 * len(filts)
+    n_rows = int(np.ceil(len(params) / n_col))
+    fig_size = (15, n_rows * row_height)
+    fig, axs = plt.subplots(
+        n_rows, n_col, figsize=fig_size,
+        sharey=True, tight_layout=True, squeeze=False)
+    
+    for ctr, (filt, c) in enumerate(zip(filts, cs)):
+        
+        trials = select_trials(
+            smln_id=smln_id, filt=filt, lmt=lmt, order_by='rand')
+        
+        y = -ctr * np.ones(len(trials))
+        
+        for param, ax in zip(params, axs.flat):
+            ax.scatter(trials[param.lower()], y, c=c, **kwargs)
+        
+    for param, ax in zip(params, axs.flat):
+        ax.set_ylim(-len(filts), 1)
+        ax.set_xlabel(param)
+        ax.yaxis.set_visible(False)
+        set_font_size(ax, 16)
+        
+    return fig, axs
 
 
 def raster(
