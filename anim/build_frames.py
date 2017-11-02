@@ -11,8 +11,8 @@ from aux import downsample_spks, downsample_ma
 from plot import set_font_size
 
 
-def ntwk_activity(
-        save_prefix, time_file, ntwk_file, fps=30, resting_size=50, spk_size=1000, amp=1,
+def ntwk(
+        save_prfx, ntwk_file, fps=30, resting_size=50, spk_size=1000, amp=1,
         positions=None, cxn_color=(0, 0, 0), cxn_lw=1, cxn_zorder=-1,
         default_color=(0, 0, 0), spk_color=(1, 0, 0), frames_per_spk=5,
         box=None, title='', x_label='', y_label='', x_ticks=None, y_ticks=None,
@@ -21,12 +21,10 @@ def ntwk_activity(
     """
     Convert a time-series of membrane potentials and spks into viewable frames.
     
-    :param save_prefix: prefix of frame files
-    :param time_file: file with dict containing the following fields:
-        'timestamps': 1-D array containing timestamps corresponding to neural activity
-        'fs': scalar sampling frequency
+    :param save_prfx: prefix of frame files
     :param ntwk_file: file with dict containing the following fields:
-        'vs': 2-D array containing membrane potential values (in V) where rows are time points
+        'vs': 2-D array containing membrane potential values (in V) where 
+        rows are time points
             and cols are neurons
         'spks': 2-D logical array indicating spk times of individual neurons
         'w': square matrix indicating recurrent connection weights among neurons
@@ -51,35 +49,37 @@ def ntwk_activity(
     """
     
     if verbose:
-        print('Using timestamp file "{}" and activity file "{}".'.format(time_file, ntwk_file))
-        print('Frames will be saved with prefix "{}".'.format(save_prefix))
-        print('Loading timestamps and network activity data...')
+        print('Using activity file "{}".'.format(ntwk_file))
+        print('Frames will be saved with prefix "{}".'.format(save_prfx))
+        print('Loading network activity...')
         
-    # load time stamps
-    ts, fs = load_time_file(time_file)
-
-    if fps > fs:
-        err_msg = ('Provided "fps" value must be smaller than original sampling frequency; '
-               'upsampling is not supported.')
-        raise ValueError(err_msg)
-    
     # load activity data
-    data_a = load(ntwk_file)
+    data = load(ntwk_file)
     
-    for key in ('vs', 'spks', 'v_rest', 'v_th'):
-        if key not in data_a:
-            raise KeyError('Item with key "{}" not found in file "{}".'.format(key, ntwk_file))
-            
-    vs = data_a['vs']
-    spks = data_a['spks']
-    v_rest = data_a['v_rest']
-    v_th = data_a['v_th']
-    cell_types = data_a['cell_types']
+    for key in ('ts', 'fs', 'vs', 'spks', 'v_rest', 'v_th'):
+        if key not in data:
+            raise KeyError('Item with key "{}" not found in file "{}".'.format(
+                key, ntwk_file))
+    
+    ts = data['ts']
+    fs = data['fs']
+    
+    if fps > fs:
+        err_msg = (
+            'Provided "fps" value must be smaller than original sampling '
+            'frequency; upsampling is not supported.')
+        raise ValueError(err_msg)
+           
+    vs = data['vs']
+    spks = data['spks']
+    v_rest = data['v_rest']
+    v_th = data['v_th']
+    cell_types = data['cell_types']
     
     # downsample data if necessary
     if fps < fs:
         if verbose:
-            print('Downsampling data from {} Hz to {} fps...'.format(fs, fps))
+            print('Downsampling data from {} to {} fps...'.format(fs, fps))
         
         n_down = int(round((ts[-1] - ts[0]) * fps))
         ts = downsample_ma(ts, n_down)
@@ -117,7 +117,7 @@ def ntwk_activity(
         default_color = np.array([default_color] * vs.shape[1])
     
     # get recurrent cxns
-    ws_rcr = data_a['ws_rcr'] if 'ws_rcr' in data_a else None
+    ws_rcr = data['ws_rcr'] if 'ws_rcr' in data else None
     
     # check cxn visualization args
     if isinstance(cxn_color, dict) and not isinstance(cxn_lw, dict):
@@ -127,8 +127,10 @@ def ntwk_activity(
     if isinstance(cxn_lw, dict) and not isinstance(cxn_color, dict):
         cxn_color = {k: cxn_color for k in cxn_lw}
     if isinstance(cxn_color, dict):
-        if not np.all([isinstance(key, tuple) and len(key) == 2 for key in cxn_color]):
-            raise TypeError('All keys in "cxn_color" must be tuples specifying (targ, src).')
+        if not np.all(
+                [isinstance(key, tuple) and len(key) == 2 for key in cxn_color]):
+            raise TypeError(
+                'All keys in "cxn_color" must be tuples specifying (targ, src).')
     
     if verbose:
         print('Data loaded.')
@@ -158,7 +160,7 @@ def ntwk_activity(
     sizes = slope * ((vs - v_rest)**amp) + resting_size
     
     # make sure save directory exists
-    save_dir = os.path.dirname(save_prefix)
+    save_dir = os.path.dirname(save_prfx)
     if not os.path.exists(save_dir): os.makedirs(save_dir)
     
     # set up figure
@@ -188,12 +190,9 @@ def ntwk_activity(
         if not isinstance(cxn_color, dict):
             
             for w in ws_rcr.values():
-                
                 line = w_to_line(w, positions)
                 ax.plot(line[0], line[1], color=cxn_color, lw=cxn_lw, zorder=-1)
-                
         else:
-            
             # color cxns according to their src and targ cell types
             for targ, src in cxn_color:
                 
@@ -214,7 +213,9 @@ def ntwk_activity(
                     
                     # draw cxns
                     line = w_to_line(w_, positions)
-                    ax.plot(line[0], line[1], color=color, lw=lw, zorder=cxn_zorder[(targ, src)])
+                    ax.plot(
+                        line[0], line[1], color=color, lw=lw,
+                        zorder=cxn_zorder[(targ, src)])
                     
     # position neurons
     sca = ax.scatter(positions[0], positions[1], c=default_color, s=10, lw=0)
@@ -238,7 +239,10 @@ def ntwk_activity(
         if not any(spk_offset_ctr):
             sca.set_color(default_color)
         else:
-            colors = [spk_color if s else dc for s, dc in zip(spk_offset_ctr, default_color)]
+            colors = [
+                spk_color if s else dc
+                for s, dc in zip(spk_offset_ctr, default_color)
+            ]
             sca.set_color(colors)
             
         # set sizes of non-spking neurons
@@ -247,7 +251,8 @@ def ntwk_activity(
         
         if show_timestamp:
             if title:
-                ax.set_title('{0}\nt = {1:.3f} s'.format(title, t), fontsize=font_size)
+                ax.set_title(
+                    '{0}\nt = {1:.3f} s'.format(title, t), fontsize=font_size)
             else:
                 ax.set_title('t = {0:.3f} s'.format(t), fontsize=font_size)
             
@@ -255,7 +260,7 @@ def ntwk_activity(
         
         spk_offset_ctr[spk_offset_ctr > 0] -= 1
         
-        save_file = '{}_{}.png'.format(save_prefix, f_ctr+1)
+        save_file = '{}_{}.png'.format(save_prfx, f_ctr+1)
         save_files.append(save_file)
         
         fig.savefig(save_file)
@@ -277,7 +282,7 @@ def ntwk_activity(
 
 
 def traj(
-        save_prefix, time_file, traj_file, fps=30, decay=0.5,
+        save_prfx, time_file, traj_file, fps=30, decay=0.5,
         location_size=2000, path_size=200, location_color=(0, 0, 1, .3), path_color=(0, 0, 0),
         cov_cutoff=None, cov_color=(0, 1, 0, .3), cov_scale=3,
         box=None, title='', x_label='', y_label='', fig_size=(6.4, 4.8),
@@ -285,7 +290,7 @@ def traj(
     """
     Convert a time-series of positions into a series of still frames.
     
-    :param save_prefix: prefix of frame files
+    :param save_prfx: prfx of frame files
     :param time_file: file with dict containing the following fields:
         'timestamps': 1-D array containing timestamps corresponding to neural activity
         'fs': scalar sampling frequency
@@ -363,7 +368,7 @@ def traj(
     box = correct_box_dims(box)
 
     # make sure save directory exists
-    save_dir = os.path.dirname(save_prefix)
+    save_dir = os.path.dirname(save_prfx)
     if not os.path.exists(save_dir): os.makedirs(save_dir)
         
     # set up figure
@@ -426,7 +431,7 @@ def traj(
             
         plt.draw()
         
-        save_file = '{}_{}.png'.format(save_prefix, f_ctr+1)
+        save_file = '{}_{}.png'.format(save_prfx, f_ctr+1)
         save_files.append(save_file)
         
         fig.savefig(save_file)
