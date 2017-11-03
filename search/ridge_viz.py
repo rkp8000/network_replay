@@ -7,6 +7,7 @@ import matplotlib as mpl
 import os
 import numpy as np
 import pandas as pd
+from pprint import pprint
 from sqlalchemy.sql.expression import func
 
 import aux
@@ -18,6 +19,25 @@ from plot import raster as _raster
 from plot import set_font_size
 
 
+def print_trial(trial_id):
+    """
+    Print out the seed, parameters, and results for a trial
+    so they can easily be copy/pasted to a config file.
+    """
+    session = make_session()
+    trial = session.query(d_models.RidgeTrial).get(trial_id)
+    session.close()
+    
+    print('TRIAL {}\n'.format(trial.id))
+    print('SEED = {}'.format(trial.seed))
+    print('')
+    print('PARAMS:')
+    pprint(ridge.trial_to_p(trial))
+    print('')
+    print('RSLTS:')
+    pprint(ridge.trial_to_rslt(trial))
+    
+    
 def rslt_scatter(smln_id, filt, lmt=None, fig_size=(10, 10), **scatter_kwargs):
     """
     Make a scatter plot of activity and speed values for a set of
