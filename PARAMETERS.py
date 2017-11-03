@@ -54,14 +54,14 @@ V_REST_INH = -0.058  # (V)
 V_TH_INH = -0.036  # (V)
 V_RESET_INH = -0.058  # (V)
 
-T_R_PC = 0.04  # (s)
+T_R_PC = 0.03  # (s)
 T_R_INH = 0.002  # (s)
 
 E_AHP_PC = -0.07  # (V)
 T_AHP_PC = 0.05  # (s)
-W_AHP_PC = 0.5
+W_AHP_PC = 0.
 
-W_AHP_INH = 0
+W_AHP_INH = 0.
 
 # SYNAPTIC CONDUCTANCE DYNAMICS
 
