@@ -217,7 +217,9 @@ def raster(
     return fig, axs, rslts, rsps_final
 
 
-def animate(save_dir, trial_id, run, pre, C, P, report_every=60):
+def animate(
+        save_dir, trial_id, run, pre, C, P,
+        positions='pfcs', fig_size=(15, 7.5), report_every=60):
     """
     Animate the activity of a ridge trial.
     
@@ -242,15 +244,24 @@ def animate(save_dir, trial_id, run, pre, C, P, report_every=60):
         os.path.join(save_dir, 'ntwk-{}-{}.npy'.format(trial_id, run)))
     
     # set cell positions
-    positions = rsp.pfcs.copy()
-    inh_mask = rsp.cell_types == 'INH'
-    
-    # random points on circle
-    pos_mean_inh = (0, -2*p['RIDGE_H'])
-    pos_rad_inh = (2*p['RIDGE_H'], p['RIDGE_H'])
-    
-    positions[:, inh_mask] = random_oval(
-        pos_mean_inh, pos_rad_inh, inh_mask.sum()).T
+    if positions == 'pfcs':
+        positions = rsp.pfcs.copy()
+        inh_mask = rsp.cell_types == 'INH'
+
+        # random points on circle
+        pos_mean_inh = (0, -2*p['RIDGE_H'])
+        pos_rad_inh = (2*p['RIDGE_H'], p['RIDGE_H'])
+
+        positions[:, inh_mask] = random_oval(
+            pos_mean_inh, pos_rad_inh, inh_mask.sum()).T
+        
+        box = [
+            -1.05 * p['RIDGE_W']/2, 1.05 * p['RIDGE_W']/2,
+            -3.05 * p['RIDGE_H'], 1.05 * p['RIDGE_H']/2,
+        ]
+    elif positions == 'random':
+        positions = np.random.rand(2, rsp.pfcs.shape[1])
+        box = [-.1, 1.1, -.1, 1.1]
     
     print('\nBuilding frames...\n')
     frame_prfx = os.path.join(save_dir, 'frames-{}-{}'.format(trial_id, run), 'f-')
@@ -258,32 +269,29 @@ def animate(save_dir, trial_id, run, pre, C, P, report_every=60):
         save_prfx=frame_prfx,
         ntwk_file=ntwk_path,
         fps=1000,
-        box=[
-            -1.05 * p['RIDGE_W']/2, 1.05 * p['RIDGE_W']/2,
-            -3.05 * p['RIDGE_H'], 1.05 * p['RIDGE_H']/2,
-        ],
+        box=box,
         resting_size=30,
         spk_size=300,
         amp=3,
         positions=positions,
         default_color={'PC': 'k', 'INH': 'g'},
         cxn_color={
-            ('PC', 'PC'): 'k', ('INH', 'PC'): 'k',
+            ('PC', 'PC'): 'gray', ('INH', 'PC'): 'gray',
             ('PC', 'INH'): 'b', ('INH', 'INH'): 'b'
         },
         cxn_lw={
-            ('PC', 'PC'): .05, ('INH', 'PC'): .01,
+            ('PC', 'PC'): .04, ('INH', 'PC'): .01,
             ('PC', 'INH'): .01, ('INH', 'INH'): 0
         },
         cxn_zorder={
-            ('PC', 'PC'): 1, ('INH', 'PC'): 0,
-            ('PC', 'INH'): 0, ('INH', 'INH'): 0
+            ('PC', 'PC'): -1, ('INH', 'PC'): -2,
+            ('PC', 'INH'): -2, ('INH', 'INH'):-2 
         },
         frames_per_spk=2,
         title='Trial {}:{}'.format(trial_id, run),
         x_label='pfc_x (m)',
         y_label='pfc_y (m)',
-        fig_size=(15, 7.5),
+        fig_size=fig_size,
         verbose=True,
         report_every=report_every)
     
