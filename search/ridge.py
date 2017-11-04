@@ -245,6 +245,11 @@ def search_status(smln_id=None, role=None, recent=30):
     if role is not None:
         searchers = searchers.filter(d_models.RidgeSearcher.role == role)
     
+    searchers = searchers.order_by(
+        d_models.RidgeSearcher.smln_id,
+        d_models.RidgeSearcher.id,
+        d_models.RidgeSearcher.role)
+    
     session.close()
     
     # check for searchers with error messages
@@ -257,13 +262,25 @@ def search_status(smln_id=None, role=None, recent=30):
             errors.append(searcher.error)
     
     # print results
-    print('{} searchers active in last {} s.\n'.format(searchers.count(), recent))
-    print('The following searchers were suspended by errors:')
+    print(
+        'The following searchers were active in the last {}'
+        ' s:\n'.format(searchers.count(), recent))
     
-    for suspended_, error in zip(suspended, errors):
-        print('{}: ERROR: "{}".'.format(suspended_, error))
+    for searcher in searchers:
+        print('{}   {}   {}'.format(
+            searcher.smln_id, searcher.id, searcher.role))
         
-    print('\nLook up error tracebacks using read_search_error(id).\n')
+    print('')
+    
+    if suspended:
+        print('The following searchers were suspended by errors:')
+
+        for suspended_, error in zip(suspended, errors):
+            print('{}: ERROR: "{}".'.format(suspended_, error))
+
+        print('\nLook up error tracebacks using read_search_error(id).\n')
+    else:
+        print('No searchers were suspended by errors.')
 
 
 def read_search_error(searcher_id):
