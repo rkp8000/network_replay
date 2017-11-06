@@ -172,6 +172,8 @@ def raster(
     
     # run ntwk obj function
     rslts, rsps = ridge.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    print('RSLTS:')
+    print(rslts)
     
     # get final rsps for each ntwk
     if show_all_rsps:
