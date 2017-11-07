@@ -1,6 +1,6 @@
-SMLN_ID = 'smln_0'
+SMLN_ID = 'smln_2'
 
-START = 'random'
+START = 'center'
 
 # ranges can be:
 #     3-element list, where first elements are lb, ub,
@@ -10,21 +10,21 @@ START = 'random'
 
 P_RANGES = (
     ('RIDGE_H', [.25]),
-    ('RIDGE_W', [4.]),
-    ('P_INH', [0., .2, 1]),
-    ('RHO_PC', [100., 2100., 1]),
+    ('RIDGE_W', [2.]),
+    ('P_INH', [.08, .14, 1]),
+    ('RHO_PC', [10000., 12000., 1]),
         
-    ('Z_PC', [0.1, 2, 1]),
-    ('L_PC', [0., .5, 1]),
-    ('W_A_PC_PC', [0, .02, 1]),
+    ('Z_PC', [1., 1.3, 1]),
+    ('L_PC', [0., .03, 1]),
+    ('W_A_PC_PC', [0, .01, 1]),
 
-    ('P_A_INH_PC', [0., .2, 1]),
-    ('W_A_INH_PC', [0., .02, 1]),
+    ('P_A_INH_PC', [.06, .1, 1]),
+    ('W_A_INH_PC', [0., .005, 1]),
 
-    ('P_G_PC_INH', [0., .2, 1]),
-    ('W_G_PC_INH', [0., .02, 1]),
+    ('P_G_PC_INH', [.03, .06, 1]),
+    ('W_G_PC_INH', [.015, .024, 1]),
 
-    ('FR_EC', [20, 70, 1]),
+    ('FR_EC', [35, 45, 1]),
 )
 
 Q_JUMP = 1
