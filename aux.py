@@ -103,6 +103,8 @@ def find_segs(x):
     return np.array([starts, ends]).T
 
 
+# MATH
+
 def running_mean(x, wdw):
     """
     Return a running average of the same length as x, 
@@ -126,6 +128,29 @@ def running_mean(x, wdw):
     mat = np.fliplr(toeplitz(c, r[::-1]))
     
     return np.nanmean(mat, 1)
+
+
+def angle_from_dx_dt_dy_dt(dx_dt, dy_dt, unit):
+    """
+    Return an angle between -180 and 180 the time derivatives of two curves
+    moving through the x-y plane.
+    
+    :param dx_dt: time-derivative of x
+    :param dy_dt: time-derivative of y
+    :param unit: 'deg' for degrees or 'rad' for radians
+    """
+    
+    theta = np.arctan(dy_dt/dx_dt) * 180 / np.pi
+    
+    if dx_dt < 0:
+        theta += (np.sign(dy_dt) * 180)
+        
+    if unit.lower() == 'deg':
+        return theta
+    elif unit.lower() == 'rad':
+        return theta * np.pi / 180
+    else:
+        raise Exception('Unit "{}" not recognized.'.format(unit))
 
 
 # DOWNSAMPLING FUNCTIONS FOR ANIMATIONS
