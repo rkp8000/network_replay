@@ -265,7 +265,7 @@ def search_status(smln_id=None, role=None, recent=30):
     # print results
     print(
         'The following searchers were active in the last {}'
-        ' s:\n'.format(searchers.count(), recent))
+        ' s:\n'.format(recent))
     
     for searcher in searchers:
         print('{}   {}   {}'.format(
@@ -1020,8 +1020,8 @@ def trial_to_p(trial):
     """Extract param dict from trial instance."""
     
     return {
-        'AREA_H': trial.ridge_h,
-        'AREA_W': trial.ridge_w,
+        'AREA_H': trial.area_h,
+        'AREA_W': trial.area_w,
         'RIDGE_Y': trial.ridge_y,
         'P_INH': trial.p_inh,
         'RHO_PC': trial.rho_pc,
