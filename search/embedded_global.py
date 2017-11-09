@@ -1,5 +1,5 @@
 """
-GLOBAL CONFIG FOR RIDGE SEARCH AND OBJECTIVE FUNCTION.
+GLOBAL CONFIG FOR EMBEDDED SEARCH AND OBJECTIVE FUNCTION.
 """
 import numpy as np
 
@@ -11,16 +11,16 @@ SEED_PRE = 0
 
 ## W_N_PC_EC VS DIST COMPUTATION
 
-PATH_W_N_PC_EC_VS_DIST = 'search/pre/ridge/w_n_pc_ec_vs_dist.npy'
+PATH_W_N_PC_EC_VS_DIST = 'search/pre/embedded/w_n_pc_ec_vs_dist.npy'
 
 DUR_W_PRE = 5.
 STIM_W_PRE = (0., 2.)
 N_TRIALS_W_PRE = 200
-DIST_PRE = np.linspace(0, 0.3, 300)
+DIST_PRE = np.linspace(0, 0.5, 500)
 
 ## V, G_N VS W_N_PC_EC, FR_EC COMPUTATION
 
-PATH_V_G_N_VS_W_N_PC_EC_FR_EC = 'search/pre/ridge/v_g_n_vs_w_n_pc_ec_fr_ec.npy'
+PATH_V_G_N_VS_W_N_PC_EC_FR_EC = 'search/pre/embedded/v_g_n_vs_w_n_pc_ec_fr_ec.npy'
 
 DUR_V_G_PRE = 21.
 MEASURE_START_V_G_PRE = 1.
@@ -58,7 +58,7 @@ SPEED_WDW = (.1, .9)
 
 # SEARCH CONFIG
 
-CONFIG_ROOT = 'search.config.ridge'
+CONFIG_ROOT = 'search.embedded.ridge'
 MAX_SEARCH_ITER = 100000
 MAX_SEED = 10000
 WAIT_AFTER_ERROR = 5

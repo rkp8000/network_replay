@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import importlib
 import numpy as np
 from sklearn.linear_model import Lasso, LinearRegression
+from statsmodels.robust.scale import mad as med_abs_dev
 import threading
 import time
 import traceback
@@ -769,7 +770,7 @@ def copy_final(rsp, wdw, p, C):
     return vs_final[:, x_order_final], spks_final[:, x_order_final]
 
 
-def get_angle(rsp, wdw, p, C, P):
+def get_angle(rsp, wdw):
     """
     Calculate the angle of the trajectory reconstructed
     from activity propagation.
@@ -860,6 +861,47 @@ def get_speed(rsp, wdw, p, C):
     speed = rgr.coef_[0]
     
     return speed
+
+
+def decode_traj(rsp, wdw, smooth=0.003, mad_max=0.25):
+    """
+    Decode a traj from a population spike train and place field
+    centers of corresponding PCs.
+    
+    :param wdw: (start, end) window over which propagation occurs (s)
+    :param smooth: length of smoothing window to use when decoding
+        x and y (s)
+    :param mad_max: maximum median absolute deviation of x or y pos to decode
+        x, y during a smoothing window
+    """
+    # loop over all smoothing windows
+    t_starts = np.arange(*wdw, smooth)
+    pc_mask = rsp.cell_types == 'PC'
+    
+    ts = np.nan * np.zeros(len(t_starts))
+    xs = np.nan * np.zeros(len(t_starts))
+    ys = np.nan * np.zeros(len(t_starts))
+    
+    for ctr, t_start in enumerate(t_starts):
+        t_mask = (t_start <= rsp.ts) & (rsp.ts < t_start + smooth)
+        
+        ts[ctr] = np.median(rsp.ts[t_mask])
+        
+        # get x & y place-field centers of cells that spiked
+        pcs = rsp.spks[t_mask, :][:, pc_mask].nonzero()[1]
+        
+        if len(pcs):
+            
+            xs_ = rsp.pfcs[0, pc_mask][pcs]
+            ys_ = rsp.pfcs[1, pc_mask][pcs]
+            
+            if med_abs_dev(xs_) < mad_max:
+                xs[ctr] = np.median(xs_)
+                
+            if med_abs_dev(ys_) < mad_max:
+                ys[ctr] = np.median(ys_)
+                
+    return ts, xs, ys
 
 
 # AUXILIARY SEARCH FUNCTIONS

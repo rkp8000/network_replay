@@ -270,6 +270,8 @@ def decoded_traj(
     print('RSLTS:')
     print(rslts)
     
+    return embedded.decode_traj(rsp, wdw, smooth, mad_max)
+
     # loop over all smoothing windows
     t_starts = np.arange(*wdw, smooth)
     pc_mask = rsp.cell_types == 'PC'
