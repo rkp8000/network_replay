@@ -272,35 +272,6 @@ def decoded_traj(
     
     return embedded.decode_traj(rsp, wdw, smooth, mad_max)
 
-    # loop over all smoothing windows
-    t_starts = np.arange(*wdw, smooth)
-    pc_mask = rsp.cell_types == 'PC'
-    
-    ts = np.nan * np.zeros(len(t_starts))
-    xs = np.nan * np.zeros(len(t_starts))
-    ys = np.nan * np.zeros(len(t_starts))
-    
-    for ctr, t_start in enumerate(t_starts):
-        t_mask = (t_start <= rsp.ts) & (rsp.ts < t_start + smooth)
-        
-        ts[ctr] = np.median(rsp.ts[t_mask])
-        
-        # get x & y place-field centers of cells that spiked
-        pcs = rsp.spks[t_mask, :][:, pc_mask].nonzero()[1]
-        
-        if len(pcs):
-            
-            xs_ = rsp.pfcs[0, pc_mask][pcs]
-            ys_ = rsp.pfcs[1, pc_mask][pcs]
-            
-            if max(xs_) < mad_max:
-                xs[ctr] = np.median(xs_)
-                
-            if max(ys_) < mad_max:
-                ys[ctr] = np.median(ys_)
-                
-    return ts, xs, ys
-        
 
 def animate(
         save_dir, trial_id, run, pre, C, P,

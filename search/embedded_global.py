@@ -58,7 +58,7 @@ SPEED_WDW = (.1, .9)
 
 # SEARCH CONFIG
 
-CONFIG_ROOT = 'search.embedded.ridge'
+CONFIG_ROOT = 'search.config.embedded'
 MAX_SEARCH_ITER = 100000
 MAX_SEED = 10000
 WAIT_AFTER_ERROR = 5

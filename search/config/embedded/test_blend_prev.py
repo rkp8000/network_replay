@@ -18,9 +18,9 @@ START = {
 P_RANGES = (
     ('AREA_H', [0, 10, 1]),
     ('AREA_W', [0, 10, 1]),
-    ('RIDGE_Y': [0, 10, 1]),
+    ('RIDGE_Y', [0, 10, 1]),
     
-    ('P_INH', [0, 10, 1]),
+    ('P_INH', [0, 10, 5]),
     ('RHO_PC', [0, 10, 1]),
         
     ('Z_PC', [0, 10, 5]),
@@ -36,7 +36,7 @@ P_RANGES = (
     ('FR_EC', [9]),
 )
 
-Q_JUMP = 0.01
+Q_JUMP = 0.003
 
 Q_NEW = 0
 
@@ -45,9 +45,9 @@ SGM_RAND = 0.1
 A_PREV = 1
 B_PREV_Y = 1
 B_PREV_U = 1
-B_PREV_K = 0
+B_PREV_K = 1
 B_PREV_S = 1
-B_PREV_SUM = B_PREV_Y + B_PREV_K + B_PREV_S
+B_PREV_SUM = B_PREV_Y + B_PREV_U + B_PREV_K + B_PREV_S
 
 L_STEP = 0.1
 L_PHI = 1

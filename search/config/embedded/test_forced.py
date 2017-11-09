@@ -14,7 +14,7 @@ FORCE = {
     -1: [
             {
                 'AREA_H': 1, 'AREA_W': 2, 'RIDGE_Y': 1,
-                'P_INH': 2, 'RHO_PC': 1,
+                'P_INH': 9, 'RHO_PC': 1,
                 'Z_PC': 9, 'L_PC': 9, 'W_A_PC_PC': 2,
                 'P_A_INH_PC': 1, 'W_A_INH_PC': 4,
                 'P_G_PC_INH': 5, 'W_G_PC_INH': 6,
@@ -22,7 +22,7 @@ FORCE = {
             },
             {
                 'AREA_H': 1, 'AREA_W': 2, 'RIDGE_Y': 1,
-                'P_INH': 2, 'RHO_PC': 1,
+                'P_INH': 1, 'RHO_PC': 1,
                 'Z_PC': 1, 'L_PC': 1, 'W_A_PC_PC': 2,
                 'P_A_INH_PC': 1, 'W_A_INH_PC': 4,
                 'P_G_PC_INH': 5, 'W_G_PC_INH': 6,
@@ -30,7 +30,7 @@ FORCE = {
             },
             {
                 'AREA_H': 1, 'AREA_W': 2, 'RIDGE_Y': 1,
-                'P_INH': 1, 'RHO_PC': 1,
+                'P_INH': 9, 'RHO_PC': 1,
                 'Z_PC': 9, 'L_PC': 9, 'W_A_PC_PC': 2,
                 'P_A_INH_PC': 1, 'W_A_INH_PC': 4,
                 'P_G_PC_INH': 5, 'W_G_PC_INH': 6,
@@ -77,7 +77,7 @@ P_RANGES = (
     ('AREA_W', [0, 10, 1]),
     ('RIDGE_Y', [0, 10, 1]),
     
-    ('P_INH', [0, 10, 1]),
+    ('P_INH', [0, 10, 5]),
     ('RHO_PC', [0, 10, 1]),
         
     ('Z_PC', [0, 10, 5]),
