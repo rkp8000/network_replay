@@ -265,7 +265,7 @@ def search_status(smln_id=None, role=None, recent=30):
     # print results
     print(
         'The following searchers were active in the last {}'
-        ' s:\n'.format(recent))
+        ' s:\n'.format(searchers.count(), recent))
     
     for searcher in searchers:
         print('{}   {}   {}'.format(
@@ -460,9 +460,6 @@ def stabilize(ntwk, p, pre, C, P, test=False):
     # sample initial vs and gs and get min nonzero firing rate
     vs_0, gs_0, fr_nz = sample_v_0_g_0_fr_nz(ntwk, p, pre, C, P)
    
-    # get ridge y-bounds
-    y_min, y_max = ridge_y_bounds(p, C)
-    
     # get x-ordered nrn idxs for nrns within ridge
     ridge_mask = get_ridge_mask(ntwk, p, C)
     
@@ -560,7 +557,7 @@ def stabilize(ntwk, p, pre, C, P, test=False):
         speed = 0.
     else:
         # get angle, activity, and speed of final ntwk response
-        angle = get_angle(rsp, wdw_prop, p, C)
+        angle = get_angle(rsp, wdw_prop)
         activity = get_activity(rsp, wdw_prop, p, C, P)
         speed = get_speed(rsp, wdw_prop, p, C)
     
@@ -574,8 +571,8 @@ def get_ridge_mask(ntwk_or_rsp, p, C):
     y_max = p['RIDGE_Y'] + C.RIDGE_H / 2
     
     mask = ntwk_or_rsp.cell_types == 'PC'
-    mask[mask] = (y_min <= ntwk_or_rsp.pfcs[0, mask]) \
-        & (ntwk_or_rsp.pfcs[0, mask] < y_max)
+    mask[mask] = (y_min <= ntwk_or_rsp.pfcs[1, mask]) \
+        & (ntwk_or_rsp.pfcs[1, mask] < y_max)
     
     return mask
 
@@ -668,7 +665,7 @@ def check_propagation(rsp, fr_nz, p, C, P):
     
     ## select final time window as approx time for constant speed
     ## propagation to cover one length scale
-    speed = (p['RIDGE_W']) / (wdw[1] - wdw[0])
+    speed = (p['AREA_W']) / (wdw[1] - wdw[0])
     t_start = wdw[1] - (C.PPGN_LOOK_BACK * p['L_PC'] / speed)
     t_end = wdw[1]
     t_mask = (t_start <= rsp.ts) & (rsp.ts < t_end)
@@ -729,7 +726,7 @@ def copy_final(rsp, wdw, p, C):
     pfcs_ridge = rsp.pfcs[:, ridge_mask]
     
     # get time and cell idxs
-    spk_t_idxs, spk_cells = spks_pc[t_mask, :].nonzero()
+    spk_t_idxs, spk_cells = spks_ridge[t_mask, :].nonzero()
     
     # convert time idxs to time
     spk_ts = rsp.ts[t_mask][spk_t_idxs]

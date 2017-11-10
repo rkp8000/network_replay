@@ -220,9 +220,9 @@ def sample_w_n_pc_ec(dists, pre):
     
     idxs_dist = aux.idx_closest(dists, w_n_pc_ec_vs_dist['dist'])
     idxs_rand = np.random.randint(
-        0, w_n_pc_ec_vs_dist['w_n_pc_ec'].shape[1], len(dists))
+        0, w_n_pc_ec_vs_dist['w_n_pc_ec'].shape[0], len(dists))
     
-    return w_n_pc_ec_vs_dist['w_n_pc_ec'][idxs_dist, idxs_rand]
+    return w_n_pc_ec_vs_dist['w_n_pc_ec'][idxs_rand, idxs_dist]
 
 
 def sample_v_g(ntwk, p, pre):
