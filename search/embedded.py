@@ -265,7 +265,7 @@ def search_status(smln_id=None, role=None, recent=30):
     # print results
     print(
         'The following searchers were active in the last {}'
-        ' s:\n'.format(searchers.count(), recent))
+        ' s:\n'.format(recent))
     
     for searcher in searchers:
         print('{}   {}   {}'.format(
@@ -1172,6 +1172,7 @@ def _sample_x_prev(cfg, ps, rslts):
     
     # get distances to targets
     d_u = np.exp(-np.abs(u - cfg.U_TARG)/cfg.ETA_U)
+    d_u[np.isnan(d_u)] = 0
     d_k = np.exp(-np.abs(k - cfg.K_TARG)/cfg.ETA_K)
     d_s = np.exp(-np.abs(s - cfg.S_TARG)/cfg.ETA_S)
     
@@ -1218,6 +1219,7 @@ def compute_phi_mean(cfg, xs, rslts):
 
     ## get distances to targets
     d_u = np.exp(-np.abs(u - cfg.U_TARG)/cfg.ETA_U)
+    d_u[np.isnan(d_u)] = 0
     d_k = np.exp(-np.abs(k - cfg.K_TARG)/cfg.ETA_K)
     d_s = np.exp(-np.abs(s - cfg.S_TARG)/cfg.ETA_S)
 
