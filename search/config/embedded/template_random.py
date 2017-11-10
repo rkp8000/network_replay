@@ -1,6 +1,11 @@
-SMLN_ID = 'smln_2'
+SMLN_ID = 'smln_0'
 
-START = 'center'
+START = {
+    'AREA_H': 0.25, 'AREA_W': 2, 'RIDGE_Y': 0., 'P_INH': 0.1, 'RHO_PC': 3000, 
+    'Z_PC': 1, 'L_PC': 0.07, 'W_A_PC_PC': 0.0085,
+    'P_A_INH_PC': 0.1, 'W_A_INH_PC': 0.009, 'P_G_PC_INH': 0.04, 'W_G_PC_INH': 0.003,
+    'FR_EC': 35
+}
 
 # ranges can be:
 #     3-element list, where first elements are lb, ub,
@@ -12,20 +17,20 @@ P_RANGES = (
     ('AREA_H', [.25]),
     ('AREA_W', [2.]),
     ('RIDGE_Y', [0.]),
-    ('P_INH', [.08, .14, 1]),
-    ('RHO_PC', [10000., 12000., 1]),
+    ('P_INH', [.05, .15, 1]),
+    ('RHO_PC', [2000., 4000., 1]),
         
-    ('Z_PC', [1., 1.3, 1]),
-    ('L_PC', [0., .03, 1]),
-    ('W_A_PC_PC', [0, .01, 1]),
+    ('Z_PC', [.7, 1.3, 1]),
+    ('L_PC', [0., .1, 1]),
+    ('W_A_PC_PC', [0, .012, 1]),
 
-    ('P_A_INH_PC', [.06, .1, 1]),
-    ('W_A_INH_PC', [0., .005, 1]),
+    ('P_A_INH_PC', [.06, .12, 1]),
+    ('W_A_INH_PC', [0., .01, 1]),
 
-    ('P_G_PC_INH', [.03, .06, 1]),
-    ('W_G_PC_INH', [.015, .024, 1]),
+    ('P_G_PC_INH', [.02, .1, 1]),
+    ('W_G_PC_INH', [.001, .02, 1]),
 
-    ('FR_EC', [35, 45, 1]),
+    ('FR_EC', [30, 45, 1]),
 )
 
 Q_JUMP = 1
