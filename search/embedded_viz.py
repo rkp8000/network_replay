@@ -52,6 +52,7 @@ def rslt_scatter(smln_id, filt, lmt=None, fig_size=(10, 10), **scatter_kwargs):
     session = make_session()
     
     trials = session.query(
+        d_models.EmbeddedTrial.angle,
         d_models.EmbeddedTrial.activity,
         d_models.EmbeddedTrial.speed).join(
         d_models.EmbeddedSearcher).filter(
@@ -60,7 +61,7 @@ def rslt_scatter(smln_id, filt, lmt=None, fig_size=(10, 10), **scatter_kwargs):
     
     session.close()
     
-    activities, speeds = np.array(trials.all()).T
+    angles, activities, speeds = np.array(trials.all()).T
     
     fig, ax = plt.subplots(1, 1, figsize=fig_size, tight_layout=True)
     ax.scatter(activities, speeds, **scatter_kwargs)
