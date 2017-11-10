@@ -8,7 +8,7 @@
 *.db
 
 sandbox.ipynb
-temp.ipynb
+temp*.ipynb
 *ipynb_checkpoints
 
 sims/
