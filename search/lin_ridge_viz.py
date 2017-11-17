@@ -14,7 +14,7 @@ from statsmodels.robust.scale import mad
 import aux
 from anim import build_frames, create_mp4
 from anim import random_oval
-from search import embedded
+from search import lin_ridge
 from db import make_session, d_models
 from plot import raster as _raster
 from plot import set_font_size
@@ -26,23 +26,23 @@ def print_trial(trial_id):
     so they can easily be copy/pasted to a config file.
     """
     session = make_session()
-    trial = session.query(d_models.EmbeddedTrial).get(trial_id)
+    trial = session.query(d_models.LinRidgeTrial).get(trial_id)
     session.close()
     
     print('TRIAL {}\n'.format(trial.id))
     print('SEED = {}'.format(trial.seed))
     print('')
     print('PARAMS:')
-    pprint(embedded.trial_to_p(trial))
+    pprint(lin_ridge.trial_to_p(trial))
     print('')
     print('RSLTS:')
-    pprint(embedded.trial_to_rslt(trial))
+    pprint(lin_ridge.trial_to_rslt(trial))
     
     
 def rslt_scatter(smln_id, filt, lmt=None, fig_size=(10, 10), **scatter_kwargs):
     """
     Make a scatter plot of activity and speed values for a set of
-    embedded trials.
+    lin_ridge trials.
     
     :param smln_id: simulation id to get trials for
     :param filt: list of sqlalchemy filters to apply
@@ -52,11 +52,11 @@ def rslt_scatter(smln_id, filt, lmt=None, fig_size=(10, 10), **scatter_kwargs):
     session = make_session()
     
     trials = session.query(
-        d_models.EmbeddedTrial.angle,
-        d_models.EmbeddedTrial.activity,
-        d_models.EmbeddedTrial.speed).join(
-        d_models.EmbeddedSearcher).filter(
-        d_models.EmbeddedSearcher.smln_id == smln_id,
+        d_models.LinRidgeTrial.angle,
+        d_models.LinRidgeTrial.activity,
+        d_models.LinRidgeTrial.speed).join(
+        d_models.LinRidgeSearcher).filter(
+        d_models.LinRidgeSearcher.smln_id == smln_id,
         *filt).limit(lmt)
     
     session.close()
@@ -79,7 +79,7 @@ def rslt_scatter(smln_id, filt, lmt=None, fig_size=(10, 10), **scatter_kwargs):
 
 def select_trials(smln_id, filt, order_by=None, lmt=None, df=True):
     """
-    Select a specific subset of embedded trials from the db.
+    Select a specific subset of lin_ridge trials from the db.
     
     :param filt: list of sqlalchemy filters to apply
     """
@@ -88,9 +88,9 @@ def select_trials(smln_id, filt, order_by=None, lmt=None, df=True):
     if order_by == 'rand':
         order_by = func.random()
     
-    trials = session.query(d_models.EmbeddedTrial).join(
-        d_models.EmbeddedSearcher).filter(
-        d_models.EmbeddedSearcher.smln_id == smln_id,
+    trials = session.query(d_models.LinRidgeTrial).join(
+        d_models.LinRidgeSearcher).filter(
+        d_models.LinRidgeSearcher.smln_id == smln_id,
         *filt).order_by(order_by).limit(lmt)
     
     session.close()
@@ -160,17 +160,17 @@ def raster(
     if isinstance(trial, int):
         session = make_session()
         trial_id = deepcopy(trial)
-        trial = session.query(d_models.EmbeddedTrial).get(trial_id)
+        trial = session.query(d_models.LinRidgeTrial).get(trial_id)
         session.close()
     
         if trial is None:
             print('Trial ID {} not found.'.format(trial_id))
             return
 
-    p = embedded.trial_to_p(trial)
+    p = lin_ridge.trial_to_p(trial)
     
     # run ntwk obj function
-    rslts, rsps = embedded.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    rslts, rsps = lin_ridge.ntwk_obj(p, pre, C, P, trial.seed, test=True)
     print('RSLTS:')
     print(rslts)
     
@@ -206,7 +206,7 @@ def raster(
     for rsp, title, ax in zip(rsps_final, titles, axs):
         
         # order cells by cell type, ridge status, and x-position
-        ridge_mask = embedded.get_ridge_mask(rsp, p, C)
+        ridge_mask = lin_ridge.get_ridge_mask(rsp, p, C)
         inh_mask = (rsp.cell_types == 'INH')
         non_ridge_pc_mask = ~(ridge_mask | inh_mask)
         
@@ -256,29 +256,29 @@ def decoded_traj(
     if isinstance(trial, int):
         session = make_session()
         trial_id = deepcopy(trial)
-        trial = session.query(d_models.EmbeddedTrial).get(trial_id)
+        trial = session.query(d_models.LinRidgeTrial).get(trial_id)
         session.close()
     
         if trial is None:
             print('Trial ID {} not found.'.format(trial_id))
             return
 
-    p = embedded.trial_to_p(trial)
+    p = lin_ridge.trial_to_p(trial)
     
     # run ntwk obj function
-    rslts, rsps = embedded.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    rslts, rsps = lin_ridge.ntwk_obj(p, pre, C, P, trial.seed, test=True)
     rsp = rsps[run][-1]
     print('RSLTS:')
     print(rslts)
     
-    return embedded.decode_traj(rsp, wdw, smooth, mad_max)
+    return lin_ridge.decode_traj(rsp, wdw, smooth, mad_max)
 
 
 def animate(
         save_dir, trial_id, run, pre, C, P,
         positions='pfcs', fig_size=(15, 7.5), report_every=60):
     """
-    Animate the activity of an embedded trial.
+    Animate the activity of an lin_ridge trial.
     
     :param run: index of run to animate (since trials comprise multiple runs)
     """
@@ -286,12 +286,12 @@ def animate(
     
     # get trial params
     session = make_session()
-    trial = session.query(d_models.EmbeddedTrial).get(trial_id)
-    p = embedded.trial_to_p(trial)
+    trial = session.query(d_models.LinRidgeTrial).get(trial_id)
+    p = lin_ridge.trial_to_p(trial)
     session.close()
     
     print('\nRunning network simulations...')
-    rslts, rsps = embedded.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    rslts, rsps = lin_ridge.ntwk_obj(p, pre, C, P, trial.seed, test=True)
     rsp = rsps[run][-1]
     print('Results: ')
     print(rslts)

@@ -11,7 +11,7 @@ import traceback
 import aux
 from db import make_session, d_models
 from ntwk import cxns_pcs_rcr, LIFNtwk
-from search import embedded_pre
+from search import lin_ridge_pre
 
 cc = np.concatenate
 
@@ -76,7 +76,7 @@ def search(
     session = make_session()
     
     # make new searcher
-    searcher = d_models.EmbeddedSearcher(
+    searcher = d_models.LinRidgeSearcher(
         smln_id=cfg.SMLN_ID,
         role=role,
         last_active=datetime.now(),
@@ -185,7 +185,7 @@ def search(
             
             rslt = obj(p_cand, seed_)
             
-            save_embedded_trial(
+            save_lin_ridge_trial(
                 session=session,
                 searcher=searcher,
                 seed=seed_,
@@ -238,18 +238,18 @@ def search_status(smln_id=None, role=None, recent=30):
     
     # get searchers
     session = make_session()
-    searchers = session.query(d_models.EmbeddedSearcher).filter(
-        d_models.EmbeddedSearcher.last_active >= earliest)
+    searchers = session.query(d_models.LinRidgeSearcher).filter(
+        d_models.LinRidgeSearcher.last_active >= earliest)
     
     if smln_id is not None:
-        searchers = searchers.filter(d_models.EmbeddedSearcher.smln_id == smln_id)
+        searchers = searchers.filter(d_models.LinRidgeSearcher.smln_id == smln_id)
     if role is not None:
-        searchers = searchers.filter(d_models.EmbeddedSearcher.role == role)
+        searchers = searchers.filter(d_models.LinRidgeSearcher.role == role)
     
     searchers = searchers.order_by(
-        d_models.EmbeddedSearcher.smln_id,
-        d_models.EmbeddedSearcher.id,
-        d_models.EmbeddedSearcher.role)
+        d_models.LinRidgeSearcher.smln_id,
+        d_models.LinRidgeSearcher.id,
+        d_models.LinRidgeSearcher.role)
     
     session.close()
     
@@ -289,7 +289,7 @@ def read_search_error(searcher_id):
     
     # get searcher
     session = make_session()
-    searcher = session.query(d_models.EmbeddedSearcher).get(searcher_id)
+    searcher = session.query(d_models.LinRidgeSearcher).get(searcher_id)
     session.close()
     
     if searcher is None:
@@ -307,7 +307,7 @@ def read_search_error(searcher_id):
         return
     
 
-# EMBEDDED-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPERS
+# LIN-RIDGE-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPERS
 
 def ntwk_obj(p, pre, C, P, seed, test=False):
 
@@ -362,7 +362,7 @@ def p_to_ntwk(p, pre, P):
     Instantiate a new ntwk from a param dict.
     """
     ## make ridge
-    pfcs, ws_n_pc_ec = embedded_hz(p, pre)
+    pfcs, ws_n_pc_ec = lin_ridge_hz(p, pre)
     
     n_pc = pfcs.shape[1]
     n_ec = n_pc
@@ -426,7 +426,7 @@ def p_to_ntwk(p, pre, P):
     return ntwk
 
 
-def embedded_hz(p, pre):
+def lin_ridge_hz(p, pre):
     """
     Randomly sample PCs from along a horizontal "ridge", assigning them each
     a place-field center and an EC->PC cxn weight.
@@ -449,7 +449,7 @@ def embedded_hz(p, pre):
     dists = np.abs(pfcs[1, :] - y)
     
     # sample and return EC->PC NMDA weights
-    return pfcs, embedded_pre.sample_w_n_pc_ec(dists, pre)
+    return pfcs, lin_ridge_pre.sample_w_n_pc_ec(dists, pre)
 
 
 def stabilize(ntwk, p, pre, C, P, test=False):
@@ -583,7 +583,7 @@ def sample_v_0_g_0_fr_nz(ntwk, p, pre, C, P, test=False):
     rate required for a ntwk's activity to be considered non-zero.
     """
     # sample initial vs and g_ns
-    vs_0_pc, gs_n_0_pc = embedded_pre.sample_v_g(ntwk, p, pre)
+    vs_0_pc, gs_n_0_pc = lin_ridge_pre.sample_v_g(ntwk, p, pre)
     
     vs_0 = cc([vs_0_pc, P.E_L_INH * np.ones(ntwk.n_inh)])
     
@@ -1192,9 +1192,9 @@ def sample_x_prev(cfg, session, p_to_x):
     """Sample previously visited x."""
     
     # get all past trials
-    trials = session.query(d_models.EmbeddedTrial).join(
-        d_models.EmbeddedSearcher).filter(
-        d_models.EmbeddedSearcher.smln_id == cfg.SMLN_ID).all()
+    trials = session.query(d_models.LinRidgeTrial).join(
+        d_models.LinRidgeSearcher).filter(
+        d_models.LinRidgeSearcher.smln_id == cfg.SMLN_ID).all()
     
     # get param and rslt dicts
     ps = [trial_to_p(trial) for trial in trials]
@@ -1257,9 +1257,9 @@ def sample_x_step(cfg, session, searcher, x_prev, since_jump, p_to_x):
     
     else:
         # get past n trials with this searcher id
-        trials = session.query(d_models.EmbeddedTrial).\
+        trials = session.query(d_models.LinRidgeTrial).\
             filter_by(searcher_id=searcher.id).\
-            order_by(d_models.EmbeddedTrial.id.desc()).limit(n).all()
+            order_by(d_models.LinRidgeTrial.id.desc()).limit(n).all()
             
         ## get params, xs, and measurables for past results
         ps = [trial_to_p(trial) for trial in trials]
@@ -1278,9 +1278,9 @@ def sample_x_step(cfg, session, searcher, x_prev, since_jump, p_to_x):
     return x_prev + l*phi
 
 
-def save_embedded_trial(session, searcher, seed, p, rslt):
+def save_lin_ridge_trial(session, searcher, seed, p, rslt):
     
-    trial = d_models.EmbeddedTrial(
+    trial = d_models.LinRidgeTrial(
         searcher_id=searcher.id,
         seed=seed,
         
