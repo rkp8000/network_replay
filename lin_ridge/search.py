@@ -11,7 +11,7 @@ import traceback
 import aux
 from db import make_session, d_models
 from ntwk import cxns_pcs_rcr, LIFNtwk
-from search import lin_ridge_pre
+from lin_ridge.pre import sample_w_n_pc_ec, sample_v_g
 
 cc = np.concatenate
 
@@ -449,7 +449,7 @@ def lin_ridge_hz(p, pre):
     dists = np.abs(pfcs[1, :] - y)
     
     # sample and return EC->PC NMDA weights
-    return pfcs, lin_ridge_pre.sample_w_n_pc_ec(dists, pre)
+    return pfcs, sample_w_n_pc_ec(dists, pre)
 
 
 def stabilize(ntwk, p, pre, C, P, test=False):
@@ -583,7 +583,7 @@ def sample_v_0_g_0_fr_nz(ntwk, p, pre, C, P, test=False):
     rate required for a ntwk's activity to be considered non-zero.
     """
     # sample initial vs and g_ns
-    vs_0_pc, gs_n_0_pc = lin_ridge_pre.sample_v_g(ntwk, p, pre)
+    vs_0_pc, gs_n_0_pc = sample_v_g(ntwk, p, pre)
     
     vs_0 = cc([vs_0_pc, P.E_L_INH * np.ones(ntwk.n_inh)])
     

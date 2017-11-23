@@ -17,9 +17,9 @@ test_anim/
 
 LOCAL.py
 
-search/config/*/*
-search/pre/*
+lin_ridge/search_config/*
+lin_ridge/rslts_pre/*
 
-!search/config/*/test_*
-!search/config/*/template_*
+!lin_ridge/search_config/test_*
+!lin_ridge/search_config/template_*
 

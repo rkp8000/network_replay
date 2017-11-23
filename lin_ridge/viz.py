@@ -14,7 +14,7 @@ from statsmodels.robust.scale import mad
 import aux
 from anim import build_frames, create_mp4
 from anim import random_oval
-from search import lin_ridge
+from lin_ridge import search
 from db import make_session, d_models
 from plot import raster as _raster
 from plot import set_font_size
@@ -33,10 +33,10 @@ def print_trial(trial_id):
     print('SEED = {}'.format(trial.seed))
     print('')
     print('PARAMS:')
-    pprint(lin_ridge.trial_to_p(trial))
+    pprint(search.trial_to_p(trial))
     print('')
     print('RSLTS:')
-    pprint(lin_ridge.trial_to_rslt(trial))
+    pprint(search.trial_to_rslt(trial))
     
     
 def rslt_scatter(smln_id, filt, lmt=None, fig_size=(10, 10), **scatter_kwargs):
@@ -167,10 +167,10 @@ def raster(
             print('Trial ID {} not found.'.format(trial_id))
             return
 
-    p = lin_ridge.trial_to_p(trial)
+    p = search.trial_to_p(trial)
     
     # run ntwk obj function
-    rslts, rsps = lin_ridge.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    rslts, rsps = search.ntwk_obj(p, pre, C, P, trial.seed, test=True)
     print('RSLTS:')
     print(rslts)
     
@@ -206,7 +206,7 @@ def raster(
     for rsp, title, ax in zip(rsps_final, titles, axs):
         
         # order cells by cell type, ridge status, and x-position
-        ridge_mask = lin_ridge.get_ridge_mask(rsp, p, C)
+        ridge_mask = search.get_ridge_mask(rsp, p, C)
         inh_mask = (rsp.cell_types == 'INH')
         non_ridge_pc_mask = ~(ridge_mask | inh_mask)
         
@@ -263,15 +263,15 @@ def decoded_traj(
             print('Trial ID {} not found.'.format(trial_id))
             return
 
-    p = lin_ridge.trial_to_p(trial)
+    p = search.trial_to_p(trial)
     
     # run ntwk obj function
-    rslts, rsps = lin_ridge.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    rslts, rsps = search.ntwk_obj(p, pre, C, P, trial.seed, test=True)
     rsp = rsps[run][-1]
     print('RSLTS:')
     print(rslts)
     
-    return lin_ridge.decode_traj(rsp, wdw, smooth, mad_max)
+    return search.decode_traj(rsp, wdw, smooth, mad_max)
 
 
 def animate(
@@ -287,11 +287,11 @@ def animate(
     # get trial params
     session = make_session()
     trial = session.query(d_models.LinRidgeTrial).get(trial_id)
-    p = lin_ridge.trial_to_p(trial)
+    p = search.trial_to_p(trial)
     session.close()
     
     print('\nRunning network simulations...')
-    rslts, rsps = lin_ridge.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    rslts, rsps = search.ntwk_obj(p, pre, C, P, trial.seed, test=True)
     rsp = rsps[run][-1]
     print('Results: ')
     print(rslts)
