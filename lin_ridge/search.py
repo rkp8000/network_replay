@@ -319,7 +319,9 @@ def ntwk_obj(p, pre, C, P, seed, test=False):
     activities = np.nan * np.zeros(C.N_NTWKS)
     speeds = np.nan * np.zeros(C.N_NTWKS)
     
-    rsps = []
+    if test:
+        rsps = []
+        ntwks = []
     
     for n_ctr in range(C.N_NTWKS):
         
@@ -336,6 +338,7 @@ def ntwk_obj(p, pre, C, P, seed, test=False):
         speeds[n_ctr] = speed
         
         if test:
+            ntwks.append(deepcopy(ntwk))
             rsps.append(rsps_)
     
     # average activity/speed over stable runs
@@ -352,7 +355,13 @@ def ntwk_obj(p, pre, C, P, seed, test=False):
         rslts = {'STABILITY': 0., 'ANGLE': np.nan, 'ACTIVITY': 0., 'SPEED': 0.}
     
     if test:
-        return rslts, rsps
+        rslts_all = {
+            'STABILITY': stabilities,
+            'ANGLE': angles,
+            'ACTIVITY': activities,
+            'SPEED': speeds
+        }
+        return rslts, rslts_all, ntwks, rsps
     else:
         return rslts
 
@@ -424,6 +433,27 @@ def p_to_ntwk(p, pre, P):
     ntwk.cell_types = cc([np.repeat('PC', n_pc), np.repeat('INH', n_inh)])
     
     return ntwk
+
+
+def trial_to_stable_ntwk(trial, pre, C, P):
+    """
+    Re-run a trial and extract the first ntwk that supports stable
+    propagation and the idxs of the nrns that were provided forced
+    spks in order to trigger replay.
+    """
+    p = trial_to_p(trial)
+    
+    rslts, rslts_all, ntwks, _ = ntkw_obj(
+        p, pre, C, P, trial.seed, test=True)
+    
+    # get which ntwk yielded first stable result
+    if np.any(rslts_all['STABILITY']):
+        idx_stable = np.nonzero(rslts_all['STABILITY'])[0][0]
+        ntwk_stable = ntwks[idx_stable]
+    else:
+        ntwk_stable = None
+        
+    return ntwk_stable
 
 
 def lin_ridge_hz(p, pre):
