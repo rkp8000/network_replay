@@ -4,9 +4,9 @@ Code for visualizing full linear ridge simulations.
 import numpy as np
 
 from db import make_session, d_models
-import full
+from lin_ridge import full
+from lin_ridge import search
 from plot import raster as _raster
-import search
 
 
 def raster(ax, ts, spks, pfcs, cell_types, p, C, **scatter_kwargs):
@@ -30,18 +30,18 @@ def raster(ax, ts, spks, pfcs, cell_types, p, C, **scatter_kwargs):
     
     # order cells by cell type, ridge status, and x-position
     ridge_mask = search.get_ridge_mask(Rsp(), p, C)
-    inh_mask = (rsp.cell_types == 'INH')
+    inh_mask = (cell_types == 'INH')
     non_ridge_pc_mask = ~(ridge_mask | inh_mask)
 
-    categories = np.zeros(len(rsp.cell_types), dtype='int8')
+    categories = np.zeros(len(cell_types), dtype='int8')
 
     categories[ridge_mask] = 0
     categories[non_ridge_pc_mask] = 1
     categories[inh_mask] = 2
 
-    order = np.lexsort((rsp.pfcs[0], categories))
+    order = np.lexsort((pfcs[0], categories))
 
-    _raster(ax, rsp.ts, rsp.spks, order, **scatter_kwargs)
+    _raster(ax, ts, spks, order, **scatter_kwargs)
 
     # draw lines separating ridge, non-ridge, and inh cell types
     y_0 = ridge_mask.sum() - 0.5
@@ -55,7 +55,7 @@ def raster(ax, ts, spks, pfcs, cell_types, p, C, **scatter_kwargs):
     return ax
 
 
-def raster_from_trial(ax, trial, pre, C, P, **scatter_kwargs):
+def raster_from_trial(ax, trial_id, pre, C, P, C_, **scatter_kwargs):
     """
     Make a raster plot given a trial/trial ID.
     """
@@ -70,22 +70,21 @@ def raster_from_trial(ax, trial, pre, C, P, **scatter_kwargs):
         scatter_kwargs['s'] = 10
         
     # get trial params
-    if isinstance(trial, int):
-        session = make_session()
-        trial_id = deepcopy(trial)
-        trial = session.query(d_models.LinRidgeTrial).get(trial_id)
-        session.close()
-    
-        if trial is None:
-            print('Trial ID {} not found.'.format(trial_id))
-            return
+    session = make_session()
+    trial_id = deepcopy(trial)
+    trial = session.query(d_models.LinRidgeFullTrial).get(trial_id)
+    session.close()
 
-    p = search.trial_to_p(trial)
+    if trial is None:
+        print('Trial ID {} not found.'.format(trial_id))
+        return
+
     rsp = full.run_smln(
-        trial.id, d_models.LinRidgeFullTrial, pre, C, P, save=False)
+        trial.id, d_models.LinRidgeFullTrial, pre, C, P, C_,
+        save=False, seed=trial.seed, commit='none')
     
     return raster(
-        ax, rsp.ts, rsp.spks, rsp.pfcs, rsp.cell_types, p, C, **scatter_kwargs)
+        ax, rsp.ts, rsp.spks, rsp.pfcs, rsp.cell_types, rsp.p, C, **scatter_kwargs)
 
 
 def animate():

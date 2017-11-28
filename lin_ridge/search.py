@@ -332,13 +332,13 @@ def ntwk_obj(p, pre, C, P, seed, return_extra=False):
         ntwk = p_to_ntwk(p, pre, P)
         
         # stabilize ntwk
-        if not return_extra:
-            rsps_, stability, angle, activity, speed = \
-                stabilize(ntwk, p, pre, C, P)
-        else:
+        if return_extra:
             rsps_, stability, angle, activity, speed, extra = \
                 stabilize(ntwk, p, pre, C, P, return_extra=True)
-        
+        else:
+            rsps_, stability, angle, activity, speed = \
+                stabilize(ntwk, p, pre, C, P)
+                
         # store results
         stabilities[n_ctr] = stability
         angles[n_ctr] = angle
@@ -370,7 +370,7 @@ def ntwk_obj(p, pre, C, P, seed, return_extra=False):
             'STABILITY': stabilities,
             'ANGLE': angles,
             'ACTIVITY': activities,
-            'SPEED': speeds
+            'SPEED': speeds,
         }
         extra = {
             'rslts_all': rslts_all,
@@ -378,7 +378,7 @@ def ntwk_obj(p, pre, C, P, seed, return_extra=False):
             'rsps': rsps,
             'vs_0': vs_0,
             'gs_0': gs_0,
-            'spks_forced': spks_forced
+            'spks_forced': spks_forced,
         }
         return rslts, extra
     else:
@@ -456,19 +456,21 @@ def p_to_ntwk(p, pre, P):
 
 def trial_to_stable_ntwk(trial, pre, C, P):
     """
+    :param trial: LinRidgeTrial
+    
     Re-run a trial and extract the first ntwk that supports stable
     propagation and the idxs of the nrns that were provided forced
     spks in order to trigger replay.
     """
     p = trial_to_p(trial)
     
-    rslts, extra = ntkw_obj(
+    rslts, extra = ntwk_obj(
         p, pre, C, P, trial.seed, return_extra=True)
     
     # get which ntwk yielded first stable result
-    if np.any(rslts_all['STABILITY']):
-        idx_stable = np.nonzero(rslts_all['STABILITY'])[0][0]
-        ntwk_stable = ntwks[idx_stable]
+    if np.any(extra['rslts_all']['STABILITY']):
+        idx_stable = np.nonzero(extra['rslts_all']['STABILITY'])[0][0]
+        ntwk_stable = extra['ntwks'][idx_stable]
         
         vs_0 = extra['vs_0'][idx_stable]
         gs_0 = extra['gs_0'][idx_stable]
@@ -574,7 +576,7 @@ def stabilize(ntwk, p, pre, C, P, test=False, return_extra=False):
             print('Run {0}: {1} forced spks, fr_decay = {2:.3} Hz'.format(
                 ctr+1, spks_forced.sum(), fr_decay))
         
-        # compare activity in decay-check wdw to last run
+        # break if activitiy hasn't decayed
         if fr_decay < fr_decay_prev * C.DECAY_RATIO:
             # update reference fr
             fr_decay_prev = fr_decay
@@ -619,7 +621,13 @@ def stabilize(ntwk, p, pre, C, P, test=False, return_extra=False):
         return rsps, stability, angle, activity, speed
     
     else:
-        extra = {'vs_0': vs_0, 'gs_0': gs_0, 'spks_forced': spks_forced}
+        extra = {
+            'vs_0': vs_0,
+            'gs_0': gs_0,
+            'vs_forced': vs_forced,
+            'spks_forced': spks_forced
+        }
+        
         return rsps, stability, angle, activity, speed, extra
 
 

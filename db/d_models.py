@@ -69,5 +69,7 @@ class LinRidgeFullTrial(Base):
     
     commit = Column(String)
     seed = Column(Integer)
-    replay_fr = Column(Float)
     
+    replay_fr = Column(Float)
+    replay_fr_min = Column(Float)
+    replay_fr_max = Column(Float)
