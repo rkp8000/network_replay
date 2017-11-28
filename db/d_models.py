@@ -56,3 +56,18 @@ class LinRidgeTrial(Base):
     angle = Column(Float)
     activity = Column(Float)
     speed = Column(Float)
+
+    
+class LinRidgeFullTrial(Base):
+    
+    __tablename__ = 'lin_ridge_full_trial'
+    
+    id = Column(Integer, primary_key=True)
+    
+    lin_ridge_trial_id = Column(Integer, ForeignKey('lin_ridge_trial.id'))
+    lin_ridge_trial = relationship('LinRidgeTrial', backref='full_trials')
+    
+    commit = Column(String)
+    seed = Column(Integer)
+    replay_fr = Column(Float)
+    

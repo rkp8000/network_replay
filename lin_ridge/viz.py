@@ -170,7 +170,8 @@ def raster(
     p = search.trial_to_p(trial)
     
     # run ntwk obj function
-    rslts, _, _, rsps = search.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    rslts, extra = search.ntwk_obj(p, pre, C, P, trial.seed, return_extra=True)
+    rsps = extra['rsps']
     print('RSLTS:')
     print(rslts)
     
@@ -266,7 +267,8 @@ def decoded_traj(
     p = search.trial_to_p(trial)
     
     # run ntwk obj function
-    rslts, _, _, rsps = search.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    rslts, extra = search.ntwk_obj(p, pre, C, P, trial.seed, return_extra=True)
+    rsps = extra['rsps']
     rsp = rsps[run][-1]
     print('RSLTS:')
     print(rslts)
@@ -291,7 +293,8 @@ def animate(
     session.close()
     
     print('\nRunning network simulations...')
-    rslts, _, _, rsps = search.ntwk_obj(p, pre, C, P, trial.seed, test=True)
+    rslts, extra = search.ntwk_obj(p, pre, C, P, trial.seed, return_extra=True)
+    rsps = extra['rsps']
     rsp = rsps[run][-1]
     print('Results: ')
     print(rslts)

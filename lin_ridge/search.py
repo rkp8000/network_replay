@@ -309,7 +309,7 @@ def read_search_error(searcher_id):
 
 # LIN-RIDGE-TRIAL-SPECIFIC OBJECTIVE FUNCTION AND HELPERS
 
-def ntwk_obj(p, pre, C, P, seed, test=False):
+def ntwk_obj(p, pre, C, P, seed, return_extra=False):
 
     np.random.seed(seed)
     
@@ -319,17 +319,25 @@ def ntwk_obj(p, pre, C, P, seed, test=False):
     activities = np.nan * np.zeros(C.N_NTWKS)
     speeds = np.nan * np.zeros(C.N_NTWKS)
     
-    if test:
-        rsps = []
+    if return_extra:
         ntwks = []
-    
+        rsps = []
+        vs_0 = []
+        gs_0 = []
+        spks_forced = []
+        
     for n_ctr in range(C.N_NTWKS):
         
         # make ntwk
         ntwk = p_to_ntwk(p, pre, P)
         
         # stabilize ntwk
-        rsps_, stability, angle, activity, speed = stabilize(ntwk, p, pre, C, P)
+        if not return_extra:
+            rsps_, stability, angle, activity, speed = \
+                stabilize(ntwk, p, pre, C, P)
+        else:
+            rsps_, stability, angle, activity, speed, extra = \
+                stabilize(ntwk, p, pre, C, P, return_extra=True)
         
         # store results
         stabilities[n_ctr] = stability
@@ -337,9 +345,12 @@ def ntwk_obj(p, pre, C, P, seed, test=False):
         activities[n_ctr] = activity
         speeds[n_ctr] = speed
         
-        if test:
+        if return_extra:
             ntwks.append(deepcopy(ntwk))
             rsps.append(rsps_)
+            vs_0.append(deepcopy(extra['vs_0']))
+            gs_0.append(deepcopy(extra['gs_0']))
+            spks_forced.append(deepcopy(extra['spks_forced']))
     
     # average activity/speed over stable runs
     mask = stabilities == 1
@@ -354,14 +365,22 @@ def ntwk_obj(p, pre, C, P, seed, test=False):
     else:
         rslts = {'STABILITY': 0., 'ANGLE': np.nan, 'ACTIVITY': 0., 'SPEED': 0.}
     
-    if test:
+    if return_extra:
         rslts_all = {
             'STABILITY': stabilities,
             'ANGLE': angles,
             'ACTIVITY': activities,
             'SPEED': speeds
         }
-        return rslts, rslts_all, ntwks, rsps
+        extra = {
+            'rslts_all': rslts_all,
+            'ntwks': ntwks,
+            'rsps': rsps,
+            'vs_0': vs_0,
+            'gs_0': gs_0,
+            'spks_forced': spks_forced
+        }
+        return rslts, extra
     else:
         return rslts
 
@@ -443,18 +462,23 @@ def trial_to_stable_ntwk(trial, pre, C, P):
     """
     p = trial_to_p(trial)
     
-    rslts, rslts_all, ntwks, _ = ntkw_obj(
-        p, pre, C, P, trial.seed, test=True)
+    rslts, extra = ntkw_obj(
+        p, pre, C, P, trial.seed, return_extra=True)
     
     # get which ntwk yielded first stable result
     if np.any(rslts_all['STABILITY']):
         idx_stable = np.nonzero(rslts_all['STABILITY'])[0][0]
         ntwk_stable = ntwks[idx_stable]
-    else:
-        ntwk_stable = None
         
-    return ntwk_stable
+        vs_0 = extra['vs_0'][idx_stable]
+        gs_0 = extra['gs_0'][idx_stable]
+        spks_forced = extra['spks_forced'][idx_stable]
 
+        return ntwk_stable, vs_0, gs_0, spks_forced
+
+    else:
+        return None
+    
 
 def lin_ridge_hz(p, pre):
     """
@@ -482,7 +506,7 @@ def lin_ridge_hz(p, pre):
     return pfcs, sample_w_n_pc_ec(dists, pre)
 
 
-def stabilize(ntwk, p, pre, C, P, test=False):
+def stabilize(ntwk, p, pre, C, P, test=False, return_extra=False):
     """
     Run ntwk cyclically until activity from beginning to end of sim
     does not change.
@@ -591,7 +615,12 @@ def stabilize(ntwk, p, pre, C, P, test=False):
         activity = get_activity(rsp, wdw_prop, p, C, P)
         speed = get_speed(rsp, wdw_prop, p, C)
     
-    return rsps, stability, angle, activity, speed
+    if not return_extra:
+        return rsps, stability, angle, activity, speed
+    
+    else:
+        extra = {'vs_0': vs_0, 'gs_0': gs_0, 'spks_forced': spks_forced}
+        return rsps, stability, angle, activity, speed, extra
 
 
 def get_ridge_mask(ntwk_or_rsp, p, C):

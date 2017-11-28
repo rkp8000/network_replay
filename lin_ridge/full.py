@@ -10,7 +10,7 @@ from ntwk import LIFNtwk
 from search import trial_to_p, trial_to_stable_ntwk
 
 
-def run_smln(trial_id, d_model, pre, C, P, save, cache_file=None, return_p=False):
+def run_smln(trial_id, d_model, pre, C, P, save, seed, commit, cache_file=None):
     """
     Run a full simulation starting from either a replay-only or full
     trial.
@@ -21,7 +21,7 @@ def run_smln(trial_id, d_model, pre, C, P, save, cache_file=None, return_p=False
         matrices and replay triggering stimulus; if no cache_file is
         specified, look for the default one in the directory C.CACHE_DIR.
     """
-    np.random.seed(0)
+    np.random.seed(seed)
     
     # load replay-only trial
     session = make_session()
@@ -57,11 +57,13 @@ def run_smln(trial_id, d_model, pre, C, P, save, cache_file=None, return_p=False
         
         # compute replay trigger
         trigger = make_replay_trigger(
-            ntwk, p, vs_0, gs_0, spks_forced)
+            ntwk, p, vs_0, gs_0, spks_forced, P)
         
         # save cache file
         aux.save(cache_file, {'ws_rcr': ws_rcr, 'pfcs': pfcs, 'trigger': trigger})
         print('Cache file saved at {}.'.format(cache_file))
+    
+    np.random.seed(seed)
     
     # load cache file
     cached = aux.load(cache_file)
@@ -110,20 +112,33 @@ def run_smln(trial_id, d_model, pre, C, P, save, cache_file=None, return_p=False
     ### build replay-triggering inputs
     for ctr in range(C.N_REPLAY):
         t_trigger = C.T_REPLAY + ctr*C.ITVL_REPLAY
-        t_idx_start = int(t_trigger/P.DT)
-        t_idx_end = t_idx_start + trigger.shape[0]
-        
-        spks_up[t_idx_start:t_idx_end, :n_pc] = trigger
+        spks_up[int(t_trigger/P.DT), :n_pc] = trigger
         
     # run ntwk
     rsp = ntwk.run(spks_up, dt=P.DT)
+    rsp.p = p
     rsp.pfcs = pfcs
     rsp.cell_types = cell_types
     
-    if return_p:
-        return rsp, p
-    else:
-        return rsp
+    # save to db if desired
+    if save:
+        # calculate mean PC activation in replay epoch
+        t_mask_replay = ts >= T_REPLAY
+        spks_pc_replay = rsp.spks[t_mask_replay][:, pc_mask]
+        replay_fr = np.mean(spks_pc_replay.sum(1) / P.DT / n_pc)
+        
+        session = make_session()
+        
+        full_trial = d_models.LinRidgeFullTrial(
+            lin_ridge_trial_id=trial.id,
+            commit=commit,
+            seed=seed,
+            replay_fr=replay_fr)
+        
+        session.add(full_trial)
+        session.commit()
+        
+    return rsp
 
 
 def p_to_ntwk_plastic(p, P, ws_rcr, pfcs):
@@ -205,11 +220,52 @@ def p_to_ntwk_plastic(p, P, ws_rcr, pfcs):
     return ntwk
 
 
-def make_replay_trigger():
+def make_replay_trigger(ntwk, p, vs_0, gs_0, spks_forced, C, P):
     """
-    takes replay-only ntwk, corresponding params and initial
-    conditions, forced_spk PC idxs, builds EC stim, and 
-    determines an input to the forced PCs sufficient to 
-    elicit replay under EC activation
+    Construct a set of upstream PL input spks that have approximately
+    the same effect as the explicitly forced spks used previously.
     """
-    pass
+    # identify idxs of forced PCs
+    pc_mask = np.all(~np.isnan(ntwk.pfcs), axis=0)
+    n_pc = pc_mask.sum()
+    
+    pcs_forced = np.unique(np.nonzero(spks_forced[pc_mask])[1])
+    n_forced = len(pcs_forced)
+    
+    # loop over increasing numbers of upstream PL spks until total ntwk 
+    # activation over a few ms is the same or greater than the number
+    # of equivalent explicitly forced spks
+    trigger = np.zeros(n_pc)
+    
+    for ctr in np.arange(0, C.PL_TRIGGER_FR_MAX/C.PL_TRIGGER_FR_INCMT):
+        
+        # increase PL spks by random incmt
+        incmt = np.random.poisson(C.PL_TRIGGER_FR_INCMT, n_forced)
+        trigger[pcs_forced] += incmt
+        
+        # build spks_up from PL cells with this trigger
+        ts = np.arange(0, C.PL_TRIGGER_RUN_TIME, P.DT)
+        
+        spks_up = np.zeros((len(ts), 2*n_pc))
+        spks_up[2, :n_pc] = trigger
+        
+        rsp = ntwk.run(spks_up, vs_0=vs_0, gs_0=gs_0, dt=P.DT)
+        
+        # break if number of spks is greater than number originally forced
+        if rsp.spks.sum() > n_forced:
+            break
+    else:
+        print('Max PL input reached without producing equivalent forced spks.')
+        
+    # make sure trigger yields replay for slightly longer time course
+    ts = np.arange(0, C.PL_TRIGGER_TEST_RUN_TIME, P.DT)
+    
+    spks_up = np.zeros((len(ts), 2*n_pc))
+    spks_up[2, :n_pc] = trigger
+    
+    rsp = ntwk.run(spks_up, vs_0=vs_0, gs_0=gs_0, dt=P.DT)
+    
+    if rsp.spks.sum() < C.MIN_SPK_CT_FACTOR_TRIGGER_TEST * n_forced:
+        print('Identified trigger potentially did not yield replay.')
+    
+    return trigger
