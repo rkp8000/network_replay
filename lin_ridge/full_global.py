@@ -9,12 +9,6 @@ PATH_V_G_N_VS_W_N_PC_EC_FR_EC = 'lin_ridge/rslts_pre/v_g_n_vs_w_n_pc_ec_fr_ec.np
 
 MAX_SEED = 100000
 
-TRAJ_START_X = 1.
-TRAJ_END_X = -1.
-
-TRAJ_START_Y = -0.125
-TRAJ_END_Y = -0.125
-
 TRAJ_START_T = 0.1
 TRAJ_END_T = 13.4333
 

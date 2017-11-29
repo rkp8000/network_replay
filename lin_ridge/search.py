@@ -454,7 +454,7 @@ def p_to_ntwk(p, pre, P):
     return ntwk
 
 
-def trial_to_stable_ntwk(trial, pre, C, P):
+def trial_to_stable_ntwk(trial, pre, C, P, test=False):
     """
     :param trial: LinRidgeTrial
     
@@ -475,11 +475,17 @@ def trial_to_stable_ntwk(trial, pre, C, P):
         vs_0 = extra['vs_0'][idx_stable]
         gs_0 = extra['gs_0'][idx_stable]
         spks_forced = extra['spks_forced'][idx_stable]
-
-        return ntwk_stable, vs_0, gs_0, spks_forced
-
+        
+        if not test:
+            return ntwk_stable, vs_0, gs_0, spks_forced
+        else:
+            extra['idx_stable'] = idx_stable
+            return ntwk_stable, vs_0, gs_0, spks_forced, extra
     else:
-        return None
+        if not test:
+            return None
+        else:
+            return None, extra
     
 
 def lin_ridge_hz(p, pre):

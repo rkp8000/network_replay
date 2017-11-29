@@ -1,6 +1,7 @@
 """
 Code for visualizing full linear ridge simulations.
 """
+import matplotlib.pyplot as plt
 import numpy as np
 
 from db import make_session, d_models
@@ -9,7 +10,7 @@ from lin_ridge import search
 from plot import raster as _raster
 
 
-def raster(ax, ts, spks, pfcs, cell_types, p, C, **scatter_kwargs):
+def raster(ts, spks, pfcs, cell_types, p, C, C_, fig_size, **scatter_kwargs):
     """
     Make a raster plot, ordering cells based on cell type,
     within-ridge status, and x-position.
@@ -29,7 +30,7 @@ def raster(ax, ts, spks, pfcs, cell_types, p, C, **scatter_kwargs):
         cell_types = cell_types
     
     # order cells by cell type, ridge status, and x-position
-    ridge_mask = search.get_ridge_mask(Rsp(), p, C)
+    ridge_mask = search.get_ridge_mask(Rsp(), p, C_)
     inh_mask = (cell_types == 'INH')
     non_ridge_pc_mask = ~(ridge_mask | inh_mask)
 
@@ -41,21 +42,26 @@ def raster(ax, ts, spks, pfcs, cell_types, p, C, **scatter_kwargs):
 
     order = np.lexsort((pfcs[0], categories))
 
-    _raster(ax, ts, spks, order, **scatter_kwargs)
-
-    # draw lines separating ridge, non-ridge, and inh cell types
-    y_0 = ridge_mask.sum() - 0.5
-    y_1 = ridge_mask.sum() + non_ridge_pc_mask.sum() - 0.5
-
-    ax.axhline(0, y_0, color='gray', ls='--', zorder=-1)
-    ax.axhline(0, y_1, color='gray', ls='--', zorder=-1)
-
-    set_font_size(ax, 16)
+    fig, axs = plt.subplots(2, 1, figsize=fig_size, tight_layout=True)
     
-    return ax
+    t_masks = [(ts < C.T_EC), (C.T_EC <= ts)]
+    
+    for t_mask, ax in zip(t_masks, axs):
+        _raster(ax, ts[t_mask], spks[t_mask], order, **scatter_kwargs)
+
+        # draw lines separating ridge, non-ridge, and inh cell types
+        y_0 = ridge_mask.sum() - 0.5
+        y_1 = ridge_mask.sum() + non_ridge_pc_mask.sum() - 0.5
+
+        ax.axhline(0, y_0, color='gray', ls='--', zorder=-1)
+        ax.axhline(0, y_1, color='gray', ls='--', zorder=-1)
+
+        set_font_size(ax, 16)
+
+    return fig, axs
 
 
-def raster_from_trial(ax, trial_id, pre, C, P, C_, **scatter_kwargs):
+def raster_from_trial(trial_id, pre, C, P, C_, fig_size, **scatter_kwargs):
     """
     Make a raster plot given a trial/trial ID.
     """
@@ -84,7 +90,8 @@ def raster_from_trial(ax, trial_id, pre, C, P, C_, **scatter_kwargs):
         save=False, seed=trial.seed, commit='none')
     
     return raster(
-        ax, rsp.ts, rsp.spks, rsp.pfcs, rsp.cell_types, rsp.p, C, **scatter_kwargs)
+        rsp.ts, rsp.spks, rsp.pfcs, rsp.cell_types, rsp.p,
+        C, C_, fig_size, **scatter_kwargs)
 
 
 def animate():

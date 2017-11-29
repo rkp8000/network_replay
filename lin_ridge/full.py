@@ -1,8 +1,10 @@
 """
 Code for running full linear ridge simulations.
 """
+from copy import deepcopy
 import numpy as np
 import os
+from scipy.sparse import csc_matrix
 
 import aux
 from db import make_session, d_models
@@ -11,7 +13,8 @@ from search import trial_to_p, trial_to_stable_ntwk
 
 
 def run_smln(
-        trial_id, d_model, pre, C, P, C_, save, seed, commit, cache_file=None):
+        trial_id, d_model, pre, C, P, C_, save, seed, commit,
+        cache_file=None, mock_trial=None):
     """
     Run a full simulation starting from either a replay-only or full
     trial.
@@ -25,25 +28,32 @@ def run_smln(
     :param cache_file: temporary file containing recurrent ntwk cxn 
         matrices and replay triggering stimulus; if no cache_file is
         specified, look for the default one in the directory C.CACHE_DIR.
+    :param mock_trial: trial object that doesn't exist in database but has
+        all relevant properties (for testing purposes); if mock_trial is
+        provided then trial_id and d_model are ignored
     """
-    np.random.seed(seed)
     
     # load replay-only trial
-    session = make_session()
-    trial = session.query(d_model).get(trial_id)
+    if mock_trial is not None:
+        trial = mock_trial
+        
+    else:    
+        session = make_session()
+        trial = session.query(d_model).get(trial_id)
 
-    if trial.__class__.__name__ == 'LinRidgeFullTrial':
-        # get replay-only trial
-        trial = trial.lin_ridge_trial
+        if trial.__class__.__name__ == 'LinRidgeFullTrial':
+            # get replay-only trial
+            trial = trial.lin_ridge_trial
 
-    session.close()
+        session.close()
     
     # get trial params
     p = trial_to_p(trial)
 
     if cache_file is None:
         # construct default cache file path
-        base_name = 'ws_rcr_replay_trigger_lin_ridge_trial_{}.npy'.format(trial_id)
+        base_name = \
+            'ws_rcr_pfcs_replay_trigger_lin_ridge_trial_{}.npy'.format(trial_id)
         cache_file = os.path.join(C.CACHE_DIR, base_name)
     
     # make new cache file if nonexistent
@@ -55,7 +65,12 @@ def run_smln(
         # run replay-only trial to get stable ntwk and initial conditions
         ntwk, vs_0, gs_0, spks_forced = trial_to_stable_ntwk(trial, pre, C_, P)
         
+        # add PL-->PC cxns
+        ntwk = add_w_up_a_pc_pl(ntwk, P)
+        
         # compute replay trigger
+        np.random.seed(seed)
+        
         trigger = make_replay_trigger(ntwk, vs_0, gs_0, spks_forced, p, C, P)
         
         # save recurrent cxns, pfcs, and replay trigger
@@ -81,7 +96,7 @@ def run_smln(
     print('Running full smln...')
     
     ## build ntwk
-    ntwk = p_to_ntwk_plastic(p, P, ws_rcr, pfcs)
+    ntwk = make_plastic_ntwk(ws_rcr, pfcs, P)
     
     ## build stim sequence
     t_final = C.T_REPLAY + (C.N_REPLAY * C.ITVL_REPLAY)
@@ -93,9 +108,16 @@ def run_smln(
     t_mask_traj = (C.TRAJ_START_T <= ts) & (ts < C.TRAJ_END_T)
     ts_traj = ts[t_mask_traj]
     
+    #### build right-to-left trajectory along ridge_y
+    traj_start_x = p['AREA_W'] / 2
+    traj_end_x = -p['AREA_W'] / 2
+    
+    traj_start_y = p['RIDGE_Y']
+    traj_end_y = p['RIDGE_Y']
+    
     xys = np.array([
-        np.linspace(C.TRAJ_START_X, C.TRAJ_END_X, len(ts_traj)),
-        np.linspace(C.TRAJ_START_Y, C.TRAJ_END_Y, len(ts_traj))]).T
+        np.linspace(traj_start_x, traj_end_x, len(ts_traj)),
+        np.linspace(traj_start_y, traj_end_y, len(ts_traj))]).T
     
     #### set place-field widths and max rates
     pfws = P.L_PL * np.ones(pfcs_pc.shape[1])
@@ -148,6 +170,36 @@ def run_smln(
     return rsp
 
 
+def add_w_up_a_pc_pl(ntwk, P):
+    """
+    Starting with a ntwk with only upstream NMDA cxns from EC, add 
+    upstream cxns from place-tuned inputs to PCs."""
+    
+    ntwk = deepcopy(ntwk)
+    
+    n = ntwk.n
+    n_pc = np.all(~np.isnan(ntwk.pfcs), axis=0).sum()
+    
+    for syn in ntwk.syns:
+        w_up = np.zeros((n, 2*n_pc))
+        
+        if syn == 'AMPA':
+            # PL --> PC cxns
+            w_up[:n_pc, :n_pc] = P.W_A_PC_PL * np.eye(n_pc)
+            
+        elif syn == 'NMDA':
+            # EC --> PC cxns
+            w_up[:, n_pc:] = ntwk.ws_up_init['NMDA'].copy()
+        
+        if syn != 'NMDA':
+            assert not np.any(ntwk.ws_up_init[syn])
+
+        # store new cxns
+        ntwk.ws_up_init[syn] = csc_matrix(w_up.copy())
+        
+    return ntwk
+    
+    
 def make_replay_trigger(ntwk, vs_0, gs_0, spks_forced, p, C, P):
     """
     Construct a set of upstream PL input spks that have approximately
@@ -163,6 +215,9 @@ def make_replay_trigger(ntwk, vs_0, gs_0, spks_forced, p, C, P):
     # loop over increasing numbers of upstream PL spks until total ntwk 
     # activation over a few ms is the same or greater than the number
     # of equivalent explicitly forced spks
+    
+    ts = np.arange(0, C.PL_TRIGGER_RUN_TIME, P.DT)
+                                   
     trigger = np.zeros(n_pc)
     
     for ctr in np.arange(0, int(C.PL_TRIGGER_FR_MAX/C.PL_TRIGGER_FR_INCMT)):
@@ -172,10 +227,11 @@ def make_replay_trigger(ntwk, vs_0, gs_0, spks_forced, p, C, P):
         trigger[pcs_forced] += incmt
         
         # build spks_up from PL cells with this trigger
-        ts = np.arange(0, C.PL_TRIGGER_RUN_TIME, P.DT)
-        
         spks_up = np.zeros((len(ts), 2*n_pc))
         spks_up[1, :n_pc] = trigger
+        
+        # add background spks_up from EC cells
+        spks_up[:, n_pc:] = np.random.poisson(p['FR_EC']*P.DT, (len(ts), n_pc))
         
         rsp = ntwk.run(spks_up, vs_0=vs_0, gs_0=gs_0, dt=P.DT)
         
@@ -191,6 +247,8 @@ def make_replay_trigger(ntwk, vs_0, gs_0, spks_forced, p, C, P):
     spks_up = np.zeros((len(ts), 2*n_pc))
     spks_up[1, :n_pc] = trigger
     
+    spks_up[:, n_pc:] = np.random.poisson(p['FR_EC']*P.DT, (len(ts), n_pc))
+    
     rsp = ntwk.run(spks_up, vs_0=vs_0, gs_0=gs_0, dt=P.DT)
     
     if rsp.spks.sum() < C.MIN_SPK_CT_FACTOR_TRIGGER_TEST * n_forced:
@@ -199,7 +257,7 @@ def make_replay_trigger(ntwk, vs_0, gs_0, spks_forced, p, C, P):
     return trigger
 
 
-def p_to_ntwk_plastic(p, P, ws_rcr, pfcs):
+def make_plastic_ntwk(ws_rcr, pfcs, P):
     """
     Create a plastic ntwk from a set of params.
     
@@ -311,7 +369,7 @@ def get_replay_metrics(rsp, p, C, P):
         n_pc_stripe = stripe_mask.sum()
         
         replay_fr_stripe = np.mean(
-            spks_pc_replay[:, stripe_mask].sum(1) /P.DT / n_pc_stripe)
+            spks_pc_replay[:, stripe_mask].sum(1) / P.DT / n_pc_stripe)
         
         replay_frs_stripe[ctr] = replay_fr_stripe
         
