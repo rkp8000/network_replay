@@ -9,7 +9,7 @@ from scipy.sparse import csc_matrix
 import aux
 from db import make_session, d_models
 from ntwk import LIFNtwk
-from search import trial_to_p, trial_to_stable_ntwk
+from lin_ridge.search import trial_to_p, trial_to_stable_ntwk
 
 
 def run_smln(
@@ -346,7 +346,7 @@ def get_replay_metrics(rsp, p, C, P):
     pc_mask = np.all(~np.isnan(rsp.pfcs), axis=0)
     n_pc = pc_mask.sum()
     
-    t_mask_replay = (ts >= C.T_REPLAY)
+    t_mask_replay = (rsp.ts >= C.T_REPLAY)
     spks_pc_replay = rsp.spks[:, pc_mask][t_mask_replay]
     
     # calculate mean PC activation in replay epoch
@@ -363,7 +363,7 @@ def get_replay_metrics(rsp, p, C, P):
         
         # get stripe mask
         y_min = -(p['AREA_H']/2) + (ctr * stripe_height)
-        y_max = y_min_stripe + stripe_height
+        y_max = y_min + stripe_height
         
         stripe_mask = (y_min <= ys_pc) & (ys_pc < y_max)
         n_pc_stripe = stripe_mask.sum()
@@ -373,5 +373,5 @@ def get_replay_metrics(rsp, p, C, P):
         
         replay_frs_stripe[ctr] = replay_fr_stripe
         
-    return replay_fr, replay_fr_min, replay_fr_max
+    return replay_fr, replay_frs_stripe.min(), replay_frs_stripe.max()
 
