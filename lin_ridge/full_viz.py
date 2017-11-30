@@ -1,6 +1,7 @@
 """
 Code for visualizing full linear ridge simulations.
 """
+from copy import deepcopy
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -8,6 +9,7 @@ from db import make_session, d_models
 from lin_ridge import full
 from lin_ridge import search
 from plot import raster as _raster
+from plot import set_font_size
 
 
 def raster(ts, spks, pfcs, cell_types, p, C, C_, fig_size, **scatter_kwargs):
@@ -23,14 +25,19 @@ def raster(ts, spks, pfcs, cell_types, p, C, C_, fig_size, **scatter_kwargs):
     if 'lw' not in scatter_kwargs:
         scatter_kwargs['lw'] = 0
     if 's' not in scatter_kwargs:
-        scatter_kwargs['s'] = 10
+        scatter_kwargs['s'] = 100
+    if 'marker' not in scatter_kwargs:
+        scatter_kwargs['marker'] = '.'
         
     class Rsp(object):
-        pfcs = pfcs
-        cell_types = cell_types
+        pass
+    
+    rsp = Rsp()
+    rsp.pfcs = pfcs
+    rsp.cell_types = cell_types
     
     # order cells by cell type, ridge status, and x-position
-    ridge_mask = search.get_ridge_mask(Rsp(), p, C_)
+    ridge_mask = search.get_ridge_mask(rsp, p, C_)
     inh_mask = (cell_types == 'INH')
     non_ridge_pc_mask = ~(ridge_mask | inh_mask)
 
@@ -53,8 +60,8 @@ def raster(ts, spks, pfcs, cell_types, p, C, C_, fig_size, **scatter_kwargs):
         y_0 = ridge_mask.sum() - 0.5
         y_1 = ridge_mask.sum() + non_ridge_pc_mask.sum() - 0.5
 
-        ax.axhline(0, y_0, color='gray', ls='--', zorder=-1)
-        ax.axhline(0, y_1, color='gray', ls='--', zorder=-1)
+        ax.axhline(y_0, color='gray', ls='--', zorder=-1)
+        ax.axhline(y_1, color='gray', ls='--', zorder=-1)
 
         set_font_size(ax, 16)
 

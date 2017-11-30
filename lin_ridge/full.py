@@ -10,6 +10,7 @@ import aux
 from db import make_session, d_models
 from ntwk import LIFNtwk
 from lin_ridge.search import trial_to_p, trial_to_stable_ntwk
+from traj import spks_up_from_traj
 
 
 def run_smln(
@@ -141,7 +142,7 @@ def run_smln(
     rsp = ntwk.run(spks_up, dt=P.DT)
     rsp.p = p
     rsp.pfcs = pfcs
-    rsp.cell_types = cell_types
+    rsp.cell_types = ntwk.cell_types
     
     # calculate a couple quick replay metrics
     replay_fr, replay_min_fr, replay_max_fr = get_replay_metrics(rsp, p, C, P)
