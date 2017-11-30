@@ -174,7 +174,6 @@ def add_w_up_a_pc_pl(ntwk, P):
     """
     Starting with a ntwk with only upstream NMDA cxns from EC, add 
     upstream cxns from place-tuned inputs to PCs."""
-    
     ntwk = deepcopy(ntwk)
     
     n = ntwk.n
@@ -189,13 +188,10 @@ def add_w_up_a_pc_pl(ntwk, P):
             
         elif syn == 'NMDA':
             # EC --> PC cxns
-            w_up[:, n_pc:] = ntwk.ws_up_init['NMDA'].copy()
+            w_up[:, n_pc:] = ntwk.ws_up_init['NMDA'].todense()
         
-        if syn != 'NMDA':
-            assert not np.any(ntwk.ws_up_init[syn])
-
         # store new cxns
-        ntwk.ws_up_init[syn] = csc_matrix(w_up.copy())
+        ntwk.ws_up_init[syn] = csc_matrix(w_up)
         
     return ntwk
     

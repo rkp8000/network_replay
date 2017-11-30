@@ -346,7 +346,7 @@ def ntwk_obj(p, pre, C, P, seed, return_extra=False):
         speeds[n_ctr] = speed
         
         if return_extra:
-            ntwks.append(deepcopy(ntwk))
+            ntwks.append(ntwk)
             rsps.append(rsps_)
             vs_0.append(deepcopy(extra['vs_0']))
             gs_0.append(deepcopy(extra['gs_0']))
