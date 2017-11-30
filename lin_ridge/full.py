@@ -193,6 +193,8 @@ def add_w_up_a_pc_pl(ntwk, P):
         # store new cxns
         ntwk.ws_up_init[syn] = csc_matrix(w_up)
         
+    ntwk.n_up = w_up.shape[1]
+    
     return ntwk
     
     
@@ -205,7 +207,7 @@ def make_replay_trigger(ntwk, vs_0, gs_0, spks_forced, p, C, P):
     pc_mask = np.all(~np.isnan(ntwk.pfcs), axis=0)
     n_pc = pc_mask.sum()
     
-    pcs_forced = np.unique(np.nonzero(spks_forced[pc_mask])[1])
+    pcs_forced = np.unique(np.nonzero(spks_forced[:, pc_mask])[1])
     n_forced = len(pcs_forced)
     
     # loop over increasing numbers of upstream PL spks until total ntwk 
