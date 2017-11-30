@@ -134,7 +134,7 @@ class LIFNtwk(object):
                 '"ws_rcr", "ws_inp") must have same keys.'
             )
 
-        self.syns = es_syn.keys()
+        self.syns = list(es_syn.keys())
 
         # check weight matrices have correct dims
         self.n = list(ws_rcr.values())[0].shape[1]
