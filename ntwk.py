@@ -213,7 +213,7 @@ class LIFNtwk(object):
 
     def run(
             self, spks_up, dt, vs_0=None, gs_0=None, g_ahp_0=None,
-            vs_forced=None, spks_forced=None):
+            vs_forced=None, spks_forced=None, store=None):
         """
         Run a simulation of the network.
 
@@ -263,23 +263,73 @@ class LIFNtwk(object):
             raise ValueError(
                 '"g_ahp_0" should be 1-D array with one element per neuron.')
 
+        if store is None:
+            store = {}
+        
+        if 'vs' not in store:
+            store['vs'] = np.float64
+        if 'spks' not in store:
+            store['spks'] = bool
+        if 'gs' not in store:
+            store['gs'] = np.float64
+        if 'g_ahp' not in store:
+            store['g_ahp'] = store['gs']
+        if 'ws_plastic' not in store:
+            store['ws_plastic'] = np.float64
+        if 'cs' not in store:
+            store['cs'] = store['ws_plastic']
+           
+        for key, val in store.items():
+            
+            if key == 'vs':
+                assert val in (None, float, np.float16, np.float64)
+            elif key == 'gs':
+                assert val in (None, float, np.float16, np.float64)
+            elif key == 'g_ahp':
+                assert val in (None, float, np.float16, np.float64)
+            elif key == 'ws_plastic':
+                assert val in (None, float, np.float16, np.float64)
+            elif key == 'spks':
+                assert val in (None, bool)
+            
+        # prepare smln
         ts = np.arange(len(spks_up)) * dt
-
-        # allocate space for dynamics results
-        sim_shape = (len(ts), self.n)
-        vs = np.nan * np.zeros(sim_shape)
-        spks = np.zeros(sim_shape, dtype=bool)
-        gs = {syn: np.nan * np.zeros(sim_shape) for syn in self.syns}
-        g_ahp = np.nan * np.zeros(sim_shape)
-        
+                  
         # initialize membrane potentials, conductances, and refractory counters
-        vs[0, :] = vs_0
-        
-        for syn in self.syns:
-            gs[syn][0, :] = gs_0[syn]
-        g_ahp[0, :] = g_ahp_0
-        
+        vs_prev = vs_0.copy()
+        spks_prev = np.zeros(vs_0.shape, dtype=bool)
+        gs_prev = {syn: gs_0[syn].copy() for syn in self.syns}
+        g_ahp_prev = g_ahp_0.copy()
         rp_ctrs = np.zeros(self.n)
+                  
+        # allocate space for slmn results and store initial values
+        sim_shape = (len(ts), self.n)
+        
+        vs = None
+        spks = None
+        gs = None
+        g_ahp = None
+        
+        if store['vs'] is not None:
+            vs = np.nan * np.zeros(sim_shape, dtype=store['vs'])
+            vs[0, :] = vs_prev.copy()
+                  
+        if store['spks'] is not None:
+            spks = np.zeros(sim_shape, dtype=bool)
+            spks[0, :] = spks_prev.copy()
+                  
+        if store['gs'] is not None:
+            gs = {
+                syn: np.nan * np.zeros(sim_shape, dtype=store['gs'])
+                for syn in self.syns
+            }
+                  
+            for syn in self.syns:
+                gs[syn][0, :] = gs_0[syn].copy()
+                  
+        if store['g_ahp'] is not None:
+            g_ahp = np.nan * np.zeros(sim_shape, dtype=store['g_ahp'])
+            g_ahp[0, :] = g_ahp_0.copy()
         
         # initialize plasticity variables
         if self.plasticity is not None:
@@ -292,19 +342,39 @@ class LIFNtwk(object):
             c_s = self.plasticity['C_S']
             beta_c = self.plasticity['BETA_C']
             
+            # set initial values for plasticity and spk ctr
+            ws_plastic_prev = {
+                syn: self.ws_up_init[syn][mask]
+                for syn, mask in masks_plastic.items()
+            }
+            # correct for shitty sparse matrix handling...
+            for syn in self.syns:
+                temp = np.nan * np.zeros(ws_plastic_prev[syn].shape)
+                temp[:] = ws_plastic_prev[syn][:]
+                ws_plastic_prev[syn] = temp.flatten()
+                
+            cs_prev = np.zeros(self.n)
+            
             # allocate space for plasticity variables
             # NOTE: ws_plastic values are time-series of just the plastic weights
             # in a 2D array where rows are time points and cols are weights
-            cs = np.zeros(sim_shape)
-            ws_plastic = {
-                syn: np.nan * np.zeros((len(ts), n_plastic))
-                for syn, n_plastic in self.ns_plastic.items()
-            }
-        
-            # set spike counter to 0 and plastic weights to initial weights
-            cs[0] = 0
-            for syn, mask in masks_plastic.items():
-                ws_plastic[syn][0] = self.ws_up_init[syn][mask].copy()
+            ws_plastic = None
+            cs = None
+            
+            if store['ws_plastic'] is not None:
+                dtype = store['ws_plastic']
+                ws_plastic = {
+                    syn: np.nan * np.zeros((len(ts), n_plastic), dtype=dtype)
+                    for syn, n_plastic in self.ns_plastic.items()
+                }
+                  
+                for syn, mask in masks_plastic.items():
+                    ws_plastic[syn][0] = self.ws_up_init[syn][mask].copy()
+                  
+            if store['cs'] is not None:
+                cs = np.zeros(sim_shape, dtype=store['cs'])
+                cs[0] = 0
+            
         else:
             masks_plastic = None
             ws_plastic = None
@@ -325,54 +395,52 @@ class LIFNtwk(object):
 
                 # calculate upstream and recurrent inputs to conductances
                 inps_up = w_up.dot(spks_up[step])
-                inps_rcr = w_rcr.dot(spks[step-1].astype(float))
+                inps_rcr = w_rcr.dot(spks_prev.astype(float))
 
                 # decay conductances and add any positive inputs
-                dg = -(dt/t_syn) * gs[syn][step-1] + inps_up + inps_rcr
-                # store conductances
-                gs[syn][step] = gs[syn][step-1] + dg
-                
+                dg = -(dt/t_syn) * gs_prev[syn] + inps_up + inps_rcr
+                gs_prev[syn] = gs_prev[syn] + dg
+             
             # calculate new AHP conductance
-            inps_ahp = self.w_ahp * spks[step-1]
+            inps_ahp = self.w_ahp * spks_prev
             
             # decay ahp conductance and add new inputs
-            dg_ahp = (-dt/self.t_ahp) * g_ahp[step-1] + inps_ahp
-            # store ahp conductance
-            g_ahp[step] = g_ahp[step-1] + dg_ahp
-
+            dg_ahp = (-dt/self.t_ahp) * g_ahp_prev + inps_ahp
+            g_ahp_prev = g_ahp_prev + dg_ahp
+                  
             # calculate current input resulting from synaptic conductances
             is_g = [
-                gs[syn][step] * (self.es_syn[syn] - vs[step-1])
+                gs_prev[syn] * (self.es_syn[syn] - vs_prev)
                 for syn in self.syns
             ]
             
             # add in AHP current
-            is_g.append(g_ahp[step] * (self.e_ahp - vs[step-1]))
+            is_g.append(g_ahp_prev * (self.e_ahp - vs_prev))
 
             # update membrane potential
-            dvs = -(dt/self.t_m) * (vs[step-1] - self.e_l) + np.sum(is_g, axis=0)
-            vs[step] = vs[step-1] + dvs
-
+            dvs = -(dt/self.t_m) * (vs_prev - self.e_l) + np.sum(is_g, axis=0)
+            vs_prev = vs_prev + dvs
+                  
             # force refractory neurons to reset potential
-            vs[step][rp_ctrs > 0] = self.v_reset[rp_ctrs > 0]
+            vs_prev[rp_ctrs > 0] = self.v_reset[rp_ctrs > 0]
             
             # force vs if desired
             if step < len(vs_forced):
                 mask = ~np.isnan(vs_forced[step])
-                vs[step][mask] = vs_forced[step][mask]
-             
-            # identify spks
-            spks[step] = vs[step] >= self.v_th
+                vs_prev[mask] = vs_forced[step][mask]
             
+            # identify spks
+            spks_prev = vs_prev >= self.v_th
+                  
             # force extra spks if desired
             if step < len(spks_forced):
-                spks[step][spks_forced[step] == 1] = 1
-             
+                spks_prev[spks_forced[step] == 1] = 1
+                   
             # reset membrane potentials of spiking neurons
-            vs[step][spks[step]] = self.v_reset[spks[step]]
+            vs_prev[spks_prev] = self.v_reset[spks_prev]
             
             # set refractory counters for spiking neurons
-            rp_ctrs[spks[step]] = self.t_r[spks[step]]
+            rp_ctrs[spks_prev] = self.t_r[spks_prev]
             # decrement refractory counters for all neurons
             rp_ctrs -= dt
             # adjust negative refractory counters up to zero
@@ -382,27 +450,49 @@ class LIFNtwk(object):
             if self.plasticity is not None:
                 
                 # calculate and store updated spk-ctr
-                cs_next = update_spk_ctr(
-                    spks=spks[step], cs_prev=cs[step-1], t_c=t_c, dt=dt)
-                cs[step] = cs_next
+                cs_prev = update_spk_ctr(
+                    spks=spks_prev, cs_prev=cs_prev, t_c=t_c, dt=dt)
                 
                 # calculate new weight values for each syn type
                 for syn in self.syns:
-                    ws_prev = ws_plastic[syn][step-1]
-                    w_ec_ca3_max = w_ec_ca3_maxs[syn]
-                    
+                
                     # reshape spk-ctr variable to align with updated weights
-                    cs_syn = cs_next[masks_plastic[syn].nonzero()[0]]
-                    ws_next = update_plastic_weights(
-                        cs=cs_syn, ws_prev=ws_prev, c_s=c_s, beta_c=beta_c,
-                        t_w=t_w, w_ec_ca3_max=w_ec_ca3_max, dt=dt)
-               
-                    # store updated weight values
-                    ws_plastic[syn][step] = ws_next
+                    cs_prev_syn = cs_prev[masks_plastic[syn].nonzero()[0]]
+                    
+                    # update weight values
+                    ws_plastic_prev[syn] = update_plastic_weights(
+                        cs=cs_prev_syn, ws_prev=ws_plastic_prev[syn],
+                        c_s=c_s, beta_c=beta_c, t_w=t_w,
+                        w_ec_ca3_max=w_ec_ca3_maxs[syn], dt=dt)
 
                 # insert updated weights into ws_up
                 for syn, mask in masks_plastic.items():
-                    ws_up[syn][mask] = ws_plastic[syn][step]
+                    ws_up[syn][mask] = ws_plastic_prev[syn]
+                  
+            # store vs
+            if store['vs'] is not None:
+                vs[step] = vs_prev.copy()
+            
+            # store spks
+            if store['spks'] is not None:
+                spks[step] = spks_prev.copy()
+
+            # store conductances
+            if store['gs'] is not None:
+                for syn in self.syns:
+                    gs[syn][step] = gs_prev[syn].copy()
+                  
+            # store ahp conductance
+            if store['g_ahp'] is not None:
+                g_ahp[step] = g_ahp_prev.copy()
+
+            if self.plasticity is not None:
+                if store['ws_plastic'] is not None:
+                    for syn in self.syns:
+                        ws_plastic[syn][step] = ws_plastic_prev[syn].copy()
+                  
+                if store['cs'] is not None:
+                    cs[step] = cs_prev.copy()
 
         # return NtwkResponse object
         return NtwkResponse(
