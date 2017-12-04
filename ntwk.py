@@ -2,6 +2,7 @@ from copy import deepcopy
 import numpy as np
 from scipy.sparse import csc_matrix
 import os
+import time
 
 from aux import save
 
@@ -78,8 +79,10 @@ def spks_forced_rand(ntwk, mask, itvl, freq, dt):
 
 class LIFNtwk(object):
     """
-    Network of leaky integrate-and-fire (LIF) neurons. All parameters should be given in SI units
-    (i.e., time constants in seconds, potentials in volts). This simulation uses exponential
+    Network of leaky integrate-and-fire (LIF) neurons.
+    All parameters should be given in SI units
+    (i.e., time constants in seconds, potentials in volts).
+    This simulation uses exponential
     synapses for all synapse types.
 
     In all weight matrices, rows index target, cols index source.
@@ -213,7 +216,7 @@ class LIFNtwk(object):
 
     def run(
             self, spks_up, dt, vs_0=None, gs_0=None, g_ahp_0=None,
-            vs_forced=None, spks_forced=None, store=None):
+            vs_forced=None, spks_forced=None, store=None, report_every=None):
         """
         Run a simulation of the network.
 
@@ -383,6 +386,9 @@ class LIFNtwk(object):
         # run simulation
         ws_up = deepcopy(self.ws_up_init)
         
+        smln_start_time = time.time()
+        last_update = time.time()
+        
         for step in range(1, len(ts)):
 
             ## update dynamics
@@ -493,6 +499,14 @@ class LIFNtwk(object):
                   
                 if store['cs'] is not None:
                     cs[step] = cs_prev.copy()
+            
+            if report_every is not None:
+                if time.time() > last_update + report_every:
+                    
+                    print('{0} steps completed after {1:.3f} s...'.format(
+                        step + 1, time.time() - smln_start_time))
+                    
+                    last_update = time.time()
 
         # return NtwkResponse object
         return NtwkResponse(

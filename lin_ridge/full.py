@@ -139,7 +139,7 @@ def run_smln(
         spks_up[int(t_trigger/P.DT), :n_pc] = trigger
         
     # run ntwk
-    rsp = ntwk.run(spks_up, dt=P.DT)
+    rsp = ntwk.run(spks_up, dt=P.DT, report_every=C.REPORT_EVERY)
     rsp.p = p
     rsp.pfcs = pfcs
     rsp.cell_types = ntwk.cell_types

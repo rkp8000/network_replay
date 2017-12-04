@@ -5,6 +5,7 @@ Configuration file for full linear ridge simulations.
 CACHE_DIR = 'lin_ridge/cache/full'
 
 MAX_SEED = 100000
+REPORT_EVERY = 30
 
 TRAJ_START_T = 0.1
 TRAJ_END_T = 13.4333
