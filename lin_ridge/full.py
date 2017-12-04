@@ -367,8 +367,11 @@ def get_replay_metrics(rsp, p, C, P):
         stripe_mask = (y_min <= ys_pc) & (ys_pc < y_max)
         n_pc_stripe = stripe_mask.sum()
         
-        replay_fr_stripe = np.mean(
-            spks_pc_replay[:, stripe_mask].sum(1) / P.DT / n_pc_stripe)
+        if n_pc_stripe != 0:
+            replay_fr_stripe = np.mean(
+                spks_pc_replay[:, stripe_mask].sum(1) / P.DT / n_pc_stripe)
+        else:
+            replay_fr_stripe = np.nan
         
         replay_frs_stripe[ctr] = replay_fr_stripe
         
