@@ -125,8 +125,9 @@ def run_smln(
     pf_max_rates = P.R_MAX_PL * np.ones(pfcs_pc.shape[1])
     
     #### add traj-spks to upstream stim
-    spks_up[t_mask_traj, :n_pc] = spks_up_from_traj(
+    spks_traj = spks_up_from_traj(
         ts_traj, xys, pfcs_pc, pfws, pf_max_rates)
+    spks_up[t_mask_traj, :n_pc] = spks_traj
     
     ### build EC inputs
     t_mask_ec = (ts >= C.T_EC)
@@ -137,7 +138,12 @@ def run_smln(
     for ctr in range(C.N_REPLAY):
         t_trigger = C.T_REPLAY + ctr*C.ITVL_REPLAY
         spks_up[int(t_trigger/P.DT), :n_pc] = trigger
-        
+    
+    # convert spks_up to int
+    spks_up = spks_up.astype(np.uint16)
+    
+    spks_traj = None
+    
     # run ntwk
     rsp = ntwk.run(
         spks_up, dt=P.DT, report_every=C.REPORT_EVERY, store=C.STORE)
@@ -146,11 +152,11 @@ def run_smln(
     rsp.cell_types = ntwk.cell_types
     
     # calculate a couple quick replay metrics
-    replay_fr, replay_min_fr, replay_max_fr = get_replay_metrics(rsp, p, C, P)
+    replay_fr, replay_fr_min, replay_fr_max = get_replay_metrics(rsp, p, C, P)
     
     rsp.replay_fr = replay_fr
-    rsp.replay_min_fr = replay_min_fr
-    rsp.replay_max_fr = replay_max_fr
+    rsp.replay_fr_min = replay_fr_min
+    rsp.replay_fr_max = replay_fr_max
         
     # save to db if desired
     if save:
@@ -161,8 +167,8 @@ def run_smln(
             commit=commit,
             seed=seed,
             replay_fr=replay_fr,
-            replay_min_fr=replay_min_fr,
-            replay_max_fr=replay_max_fr)
+            replay_fr_min=replay_fr_min,
+            replay_fr_max=replay_fr_max)
         
         session.add(full_trial)
         session.commit()

@@ -401,13 +401,13 @@ class LIFNtwk(object):
 
                 # calculate upstream and recurrent inputs to conductances
                 inps_up = w_up.dot(spks_up[step])
-                inps_rcr = w_rcr.dot(spks_prev.astype(float))
+                inps_rcr = w_rcr.dot(spks_prev)
 
                 # decay conductances and add any positive inputs
                 dg = -(dt/t_syn) * gs_prev[syn] + inps_up + inps_rcr
                 gs_prev[syn] = gs_prev[syn] + dg
              
-            # calculate new AHP conductance
+            # calculate new AHP inputs
             inps_ahp = self.w_ahp * spks_prev
             
             # decay ahp conductance and add new inputs
@@ -426,7 +426,7 @@ class LIFNtwk(object):
             # update membrane potential
             dvs = -(dt/self.t_m) * (vs_prev - self.e_l) + np.sum(is_g, axis=0)
             vs_prev = vs_prev + dvs
-                  
+            
             # force refractory neurons to reset potential
             vs_prev[rp_ctrs > 0] = self.v_reset[rp_ctrs > 0]
             
@@ -503,11 +503,18 @@ class LIFNtwk(object):
             if report_every is not None:
                 if time.time() > last_update + report_every:
                     
-                    print('{0} steps completed after {1:.3f} s...'.format(
-                        step + 1, time.time() - smln_start_time))
+                    print('{0}/{1} steps completed after {2:.3f} s...'.format(
+                        step + 1, len(ts), time.time() - smln_start_time))
                     
                     last_update = time.time()
-
+        
+        if self.plasticity is not None:
+            if store['ws_plastic'] is None:
+                ws_plastic = {
+                    syn: ws_plastic_prev[syn].flatten()[:, None]
+                    for syn in self.syns
+                }
+                
         # return NtwkResponse object
         return NtwkResponse(
             ts=ts, vs=vs, spks=spks, v_rest=self.e_l, v_th=self.v_th,
