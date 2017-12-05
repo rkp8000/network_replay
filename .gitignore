@@ -18,6 +18,8 @@ test_anim/
 
 LOCAL.py
 
+anim/cache/*
+
 lin_ridge/search_config/*
 lin_ridge/rslts_pre/*
 lin_ridge/cache/*
