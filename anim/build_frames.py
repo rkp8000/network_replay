@@ -3,6 +3,7 @@ from matplotlib.patches import Ellipse
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+from scipy.sparse import issparse
 import time
 
 from aux import load, save
@@ -12,129 +13,96 @@ from plot import set_font_size
 
 
 def ntwk(
-        save_prfx, ntwk_file, fps=30, resting_size=50, spk_size=1000, amp=1,
-        positions=None, cxn_color=(0, 0, 0), cxn_lw=1, cxn_zorder=-1,
-        default_color=(0, 0, 0), spk_color=(1, 0, 0), frames_per_spk=5,
-        box=None, title='', x_label='', y_label='', x_ticks=None, y_ticks=None,
-        x_tick_labels=None, y_tick_labels=None, show_timestamp=True,
-        fig_size=(6.4, 4.8), font_size=16, verbose=False, report_every=30):
+        frame_prfx, rsp, t_start=None, t_end=None,
+        positions=None, box=None, fig_w=None, fig_h=None,
+        resting_size=50, spk_size=1000, amp=1,
+        non_spk_colors=None, spk_color='r',
+        cxn_colors=None, cxn_lws=None, cxn_z_orders=None,
+        x_ticks=None, y_ticks=None, x_tick_labels=None, y_tick_labels=None,
+        x_label='', y_label='', title='', font_size=16,
+        fps=30, frames_per_spk=5, show_timestamp=True,
+        verbose=True, report_every=60):
     """
     Convert a time-series of membrane potentials and spks into viewable frames.
     
-    :param save_prfx: prefix of frame files
-    :param ntwk_file: file with dict containing the following fields:
-        'vs': 2-D array containing membrane potential values (in V) where 
-        rows are time points
-            and cols are neurons
-        'spks': 2-D logical array indicating spk times of individual neurons
-        'w': square matrix indicating recurrent connection weights among neurons
-        'v_rest': resting membrane potential (in V)
-        'v_th': threshold membrane potential (in V)
-    :param fps: frame rate
-    :param resting_size: size of neurons at rest
-    :param spk_size: size of neurons when they've reached spking threshold
-    :param amp: how much to polynomially amplify the visual difference between 
-        different membrane voltages (keep at 1 for linear relationship between
-        membrane voltage and circular area)
-    :param cxn_color: color or dict of colors, e.g.,
-        cxn_color=(0, 0, 0),
-        cxn_color={('EX', 'EX'): (0, 0, 0), ('INH', 'EX'): (1, 0, 0)},
-    :param default_color: neuron color
-    :param spk_color: color of neuron when spking
-    :param box: bounding box to display neurons in: (x_min, x_max, y_min, y_max)
-    :param show_timestamp: whether or not to show timestamp in figure title
-    :param fig_size: size of figure to make
-    :param verbose: whether or not to print progress details
-    :param report_every: approximately how often to report progress (s)
+    :param frame_prfx: prefix of path to save frames at
+    :param rsp: ntwk response object or path to ntwk response object
+        rsp should have the following attributes:
+            v_rest, v_th, ts, vs, spks, [cell_types, ws_rcr]
+    :param t_start: start time of animation
+    :param t_end: end time of animation
+    :param positions: 2 x N array of cell positions
+        if None, positions will be uniform in unit square
+    :param box: bounding box for displaying cells
+    :param fig_w: figure width
+    :param fig_h: figure height
+        at least fig_w or fig_h must be provided; the other can be
+        calculated automatically from box
+    :param resting_size: size of cell at resting potential
+    :param spk_size: size of cell when spiking
+    :param non_spk_color: dict of colors of non-spiking cells
+    :param spk_color: color of spiking cells
+    :param cxn_colors: dict of cxn colors, e.g.
+        {('PC', 'PC'): 'k', ('INH', 'PC': 'b')}
+    :param cxn_lws: dict of cxn line widths
+    :param cxn_z_orders: dict of cxn z_orders
+    :params x_ticks, y_ticks, x_tick_labels, y_tick_labels: as in matplotlib
+    :params x_label, y_label, title: as in matplotlib
+    :param font_size: font size
+    :param fps: frame rate of animation (frames per second)
+    :param frames_per_spk: how many frames to show each spk for
+    :param show_timestamp: whether to append current timestamp below title
+    :param verbose: whether to print out frame-building progress
+    :param report_every: how often to report progress if verbose is True (s)
+    
+    :return: list of paths to frames
     """
+    alert = lambda m: print(m) if verbose else None
+    alert('\n')
     
-    if verbose:
-        print('Using activity file "{}".'.format(ntwk_file))
-        print('Frames will be saved with prefix "{}".'.format(save_prfx))
-        print('Loading network activity...')
-        
-    # load activity data
-    data = load(ntwk_file)
+    # load response file
+    if isinstance(rsp, str):
+        alert('Loading activity file "{}"...'.format(rsp))
+        rsp = load(rsp)
+        alert('Loaded.\n')
     
-    for key in ('ts', 'fs', 'vs', 'spks', 'v_rest', 'v_th'):
-        if key not in data:
-            raise KeyError('Item with key "{}" not found in file "{}".'.format(
-                key, ntwk_file))
+    v_rest = rsp.v_rest
+    v_th = rsp.v_th
+    ts = rsp.ts
+    vs = rsp.vs
+    spks = rsp.spks
     
-    ts = data['ts']
-    fs = data['fs']
+    n = vs.shape[1]
+    dt = np.mean(np.diff(rsp.ts))
+    fs = 1 / dt
+    
+    if hasattr(rsp, 'cell_types'):
+        cell_types = rsp.cell_types
+    else:
+        cell_types = np.repeat('PC', n)
+    
+    ws_rcr = rsp.ws_rcr if hasattr(rsp, 'ws_rcr') else None
     
     if fps > fs:
-        err_msg = (
-            'Provided "fps" value must be smaller than original sampling '
-            'frequency; upsampling is not supported.')
-        raise ValueError(err_msg)
-           
-    vs = data['vs']
-    spks = data['spks']
-    v_rest = data['v_rest']
-    v_th = data['v_th']
-    cell_types = data['cell_types']
-    
-    # downsample data if necessary
-    if fps < fs:
-        if verbose:
-            print('Downsampling data from {} to {} fps...'.format(fs, fps))
+        raise ValueError(
+            'fps must be smaller than original sampling '
+            'frequency (upsampling is not supported).')
         
-        n_down = int(round((ts[-1] - ts[0]) * fps))
-        ts = downsample_ma(ts, n_down)
-        
-        # membrane potential and spks
-        vs = downsample_ma(vs, n_down)
-        spks = downsample_spks(spks, n_down)
-    
-        if verbose:
-            print('Data downsampled.')
-    
-    # let n be number of nrns
-    n = vs.shape[1]
-    
     # make sure timestamp vector is same length as activity vectors
     assert len(ts) == len(vs) == len(spks)
     
+    if t_start is None:
+        t_start = ts[0] - dt
+    if t_end is None:
+        t_end = ts[-1] + dt
+        
     # generate random positions if not provided
     if positions is None:
-        positions = np.random.normal(0, 1, (2, n))
+        positions = np.random.uniform(0, 1, (2, n))
         
     if positions.shape != (2, n):
         raise ValueError('Arg "positions" must be a (2 x N) array.')
      
-    # convert default_color into array of colors for each cell
-    if cell_types is not None and isinstance(default_color, dict):
-        # make sure cell types align with specified color cell types
-        try:
-            assert np.all([ct in default_color for ct in np.unique(cell_types)])
-        except:
-            raise KeyError('All cell types must have a default color.')
-            
-        default_color = np.array([default_color[ct] for ct in cell_types])
-    else:
-        default_color = np.array([default_color] * vs.shape[1])
-    
-    # get recurrent cxns
-    ws_rcr = data['ws_rcr'] if 'ws_rcr' in data else None
-    
-    # check cxn visualization args
-    if isinstance(cxn_color, dict) and not isinstance(cxn_lw, dict):
-        cxn_lw = {k: cxn_lw for k in cxn_color}
-    if isinstance(cxn_color, dict) and not isinstance(cxn_zorder, dict):
-        cxn_zorder = {k: cxn_zorder for k in cxn_color}
-    if isinstance(cxn_lw, dict) and not isinstance(cxn_color, dict):
-        cxn_color = {k: cxn_color for k in cxn_lw}
-    if isinstance(cxn_color, dict):
-        if not np.all(
-                [isinstance(key, tuple) and len(key) == 2 for key in cxn_color]):
-            raise TypeError(
-                'All keys in "cxn_color" must be tuples specifying (targ, src).')
-    
-    if verbose:
-        print('Data loaded.')
-    
     # automatically compute box size if not provided
     if box is None:
         x_min = positions[0].min()
@@ -155,19 +123,76 @@ def ntwk(
     # automatically adjust box if either dimension is zero
     box = correct_box_dims(box)
     
+    # convert non_spk_colors into array of colors for each cell
+    if not non_spk_colors:
+        non_spk_colors = {cell_type: 'k' for cell_type in set(cell_types)}
+     
+    assert set(rsp.cell_types) == set(non_spk_colors)
+
+    non_spk_colors_ = np.repeat('', n)
+    
+    for cell_type in set(rsp.cell_types):
+        non_spk_colors_[rsp.cell_types == cell_type] = non_spk_colors[cell_type]
+    
+    non_spk_colors = non_spk_colors_
+   
+    # make sure all cxn args are dicts
+    if ws_rcr is not None:
+        assert isinstance(cxn_colors, dict)
+        assert isinstance(cxn_lws, dict)
+        assert isinstance(cxn_z_orders, dict)
+    
+        if not set(cxn_colors) == set(cxn_lws) == set(cxn_z_orders):
+            raise KeyError('All cxn* args must have same keys.')
+    else:
+        cxn_colors = {}
+        
+    assert (fig_w is not None) or (fig_h is not None)
+   
+    # select data only in desired time window
+    t_mask = (t_start <= ts) & (ts < t_end)
+    
+    assert t_mask.sum() > 0
+    
+    ts = ts[t_mask]
+    vs = vs[t_mask]
+    spks = spks[t_mask]
+    
+    # downsample data if necessary
+    if fps < fs:
+        alert('Downsampling data from {} to {} fps...'.format(fs, fps))
+        
+        n_down = int(round((ts[-1] - ts[0]) * fps))
+        ts = downsample_ma(ts, n_down)
+        
+        # membrane potential and spks
+        vs = downsample_ma(vs, n_down)
+        spks = downsample_spks(spks, n_down)
+    
+        alert('Downsampled.\n')
+    
     # convert membrane potentials to scatter sizes
     slope = (spk_size - resting_size) / ((v_th - v_rest)**amp)
     sizes = slope * ((vs - v_rest)**amp) + resting_size
     
     # make sure save directory exists
-    save_dir = os.path.dirname(save_prfx)
-    if not os.path.exists(save_dir): os.makedirs(save_dir)
+    frame_dir = os.path.dirname(frame_prfx)
+    if not os.path.exists(frame_dir): os.makedirs(frame_dir)
     
     # set up figure
-    fig, ax = plt.subplots(1, 1, figsize=fig_size, tight_layout=True)
+    aspect = (box[3] - box[2]) / (box[1] - box[0])
+    
+    if fig_h is None:
+        fig_h = fig_w * aspect
+    elif fig_w is None:
+        fig_w = fig_h / aspect
+    
+    fig, ax = plt.subplots(1, 1, figsize=(fig_w, fig_h), tight_layout=True)
     
     ax.set_xlim(box[:2])
     ax.set_ylim(box[2:])
+    
+    ax.autoscale(False)
     
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
@@ -184,47 +209,39 @@ def ntwk(
     set_font_size(ax, font_size)
     
     # draw cxns if desired
-    if np.sum(np.abs([np.sum(np.abs(w)) for w in ws_rcr.values()])):
+    if cxn_colors:
+        alert('Drawing cxns...')
         
-        # make all cxns same color if cxn_color is just a tuple
-        if not isinstance(cxn_color, dict):
-            
-            for w in ws_rcr.values():
-                line = w_to_line(w, positions)
-                ax.plot(line[0], line[1], color=cxn_color, lw=cxn_lw, zorder=-1)
-        else:
-            # color cxns according to their src and targ cell types
-            for targ, src in cxn_color:
-                
-                # get cxn mask
-                targ_mask = np.array(cell_types) == targ
-                src_mask = np.array(cell_types) == src
-                targ_src_mask = np.outer(targ_mask, src_mask)
-                
-                # draw cxns
-                lw = cxn_lw[(targ, src)]
-                color = cxn_color[(targ, src)]
-                
-                for w in ws_rcr.values():
-                    
-                    # make new w with unmasked cxns set to zero
-                    w_ = w.copy()
-                    w_[~targ_src_mask] = 0
-                    
-                    # draw cxns
-                    line = w_to_line(w_, positions)
-                    ax.plot(
-                        line[0], line[1], color=color, lw=lw,
-                        zorder=cxn_zorder[(targ, src)])
-                    
+    for key in cxn_colors:
+        
+        targ, src, syn = key
+        
+        # get cxn mask
+        mask = np.outer(
+            np.array(cell_types) == targ,
+            np.array(cell_types) == src)
+
+        # convert cxns to broken line for fast plotting
+        line = w_to_line(ws_rcr[syn], mask, positions)
+        
+        ax.plot(
+            *line,
+            color=cxn_colors[key],
+            lw=cxn_lws[key],
+            zorder=cxn_z_orders[key])
+    
+    if cxn_colors:
+        alert('Drawn.\n')
+
     # position neurons
-    sca = ax.scatter(positions[0], positions[1], c=default_color, s=10, lw=0)
+    sca = ax.scatter(positions[0], positions[1], c=non_spk_colors, s=0, lw=0)
     
     # loop over frames
-    if verbose:
-        print('Generating and saving {} frames...'.format(len(ts)))
+    alert(
+        'Generating and saving {0} frames spanning times {1:.6f} to {2:.6f} s'
+        '...'.format(len(ts), ts[0], ts[-1]))
         
-    save_files = []
+    frames = []
     spk_offset_ctr = np.zeros(spks.shape[1], dtype=int)
     
     loop_start_time = time.time()
@@ -232,58 +249,50 @@ def ntwk(
     
     for f_ctr, (t, sizes_, spks_) in enumerate(zip(ts, sizes, spks)):
         
-        # set colors according to spking
+        # get new spks
         spk_offset_ctr[spks_] = frames_per_spk
         
-        # set colors
-        if not any(spk_offset_ctr):
-            sca.set_color(default_color)
-        else:
-            colors = [
-                spk_color if s else dc
-                for s, dc in zip(spk_offset_ctr, default_color)
-            ]
-            sca.set_color(colors)
+        # set colors according to spiking
+        colors = non_spk_colors.copy()
+        colors[spk_offset_ctr > 0] = spk_color
+        
+        sca.set_color(colors)
             
         # set sizes of non-spking neurons
         sizes_[spk_offset_ctr > 0] = spk_size
         sca.set_sizes(sizes_)
         
         if show_timestamp:
-            if title:
-                ax.set_title(
-                    '{0}\nt = {1:.3f} s'.format(title, t), fontsize=font_size)
-            else:
-                ax.set_title('t = {0:.3f} s'.format(t), fontsize=font_size)
+            title_ = '{0}\nt = {1:.3f} s'.format(title, t)
+            ax.set_title(title_, fontsize=font_size)
             
         plt.draw()
         
         spk_offset_ctr[spk_offset_ctr > 0] -= 1
         
-        save_file = '{}_{}.png'.format(save_prfx, f_ctr+1)
-        save_files.append(save_file)
+        frame = '{}_{}.png'.format(frame_prfx, f_ctr+1)
+        frames.append(frame)
         
-        fig.savefig(save_file)
+        fig.savefig(frame)
         
         if time.time() > last_update + report_every:
             
-            if verbose:
-                print('{0} frames completed after {1:.3f} s...'.format(
-                    f_ctr + 1, time.time() - loop_start_time))
-                
+            alert('{0} frames completed after {1:.3f} s...'.format(
+                f_ctr + 1, time.time() - loop_start_time)) 
+            
             last_update = time.time()
         
     plt.close()
     
-    if verbose:
-        print('All frames written to disk.')
+    alert('All frames written to disk.')
         
-    return save_files
+    return frames
 
 
 def traj(
         save_prfx, time_file, traj_file, fps=30, decay=0.5,
-        location_size=2000, path_size=200, location_color=(0, 0, 1, .3), path_color=(0, 0, 0),
+        location_size=2000, path_size=200, location_color=(0, 0, 1, .3), 
+        path_color=(0, 0, 0),
         cov_cutoff=None, cov_color=(0, 1, 0, .3), cov_scale=3,
         box=None, title='', x_label='', y_label='', fig_size=(6.4, 4.8),
         show_timestamp=True, font_size=16, verbose=False):
@@ -500,19 +509,21 @@ def ellipse_from_cov(xy, cov, scale, color):
     return ell
 
 
-def w_to_line(w, xys):
-    """Convert a connection matrix and set of positions to a single plottable line.
+def w_to_line(w, mask, xys):
+    """
+    Convert a cxn matrix, mask, and set of positions to single plottable line.
     
     :param w: cxn matrix
+    :param mask: cell type mask (same size as cxn matrix)
     :param xys: neuron positions
     """
     if not (w.shape[0] == w.shape[1]):
         raise ValueError('Argument "w" must be a square array.')
     if not (xys.shape == (2, w.shape[1])):
         raise ValueError('Argument "xys" must be a (2 x N) array.')
-    
-    # get targ and src cell idxs for all nonzero weights
-    idxs_targ, idxs_src = w.nonzero()
+        
+    # get targ and src cell idxs for all nonzero weights within mask
+    idxs_targ, idxs_src = (w > 0).multiply(mask).nonzero()
     
     # get positions corresponding to targs and src
     xs_targ, ys_targ = xys[:, idxs_targ]
