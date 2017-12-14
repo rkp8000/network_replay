@@ -933,24 +933,46 @@ def get_speed(rsp, wdw, p, C):
     return speed
 
 
-def decode_traj(rsp, wdw, smooth=0.003, mad_max=0.25):
+def decode_traj(
+        rsp, wdw, smooth=0.003, mad_max=0.25, fr_min=1, continuous=False):
     """
     Decode a traj from a population spike train and place field
     centers of corresponding PCs.
     
-    :param wdw: (start, end) window over which propagation occurs (s)
+    :param wdw: (start, end) window over which propagation occurs (s),
+        set to None to use whole trajectory
     :param smooth: length of smoothing window to use when decoding
         x and y (s)
     :param mad_max: maximum median absolute deviation of x or y pos to decode
         x, y during a smoothing window
+    :param fr_min: minimum firing rate during measurement window for
+        traj to be decoded (Hz)
+    :param continuous: whether to continuously slide window; if true and 
+        wdw is None, then results will have same size as rsp.ts
     """
     # loop over all smoothing windows
-    t_starts = np.arange(*wdw, smooth)
+    dt = np.mean(np.diff(rsp.ts))
+    
+    if (wdw is None) and continuous:
+        
+        wdw = (rsp.ts[0], rsp.ts[-1] + dt)
+        t_starts = np.arange(len(rsp.ts)) * dt - (smooth/2)
+        
+    elif (wdw is not None) and (not continuous):
+        
+        t_starts = np.arange(*wdw, smooth)
+        
     pc_mask = rsp.cell_types == 'PC'
     
     ts = np.nan * np.zeros(len(t_starts))
     xs = np.nan * np.zeros(len(t_starts))
     ys = np.nan * np.zeros(len(t_starts))
+    
+    if hasattr(mad_max, '__iter__'):
+        mad_max_x, mad_max_y = mad_max
+    else:
+        mad_max_x = mad_max
+        mad_max_y = mad_max
     
     for ctr, t_start in enumerate(t_starts):
         t_mask = (t_start <= rsp.ts) & (rsp.ts < t_start + smooth)
@@ -960,15 +982,15 @@ def decode_traj(rsp, wdw, smooth=0.003, mad_max=0.25):
         # get x & y place-field centers of cells that spiked
         pcs = rsp.spks[t_mask, :][:, pc_mask].nonzero()[1]
         
-        if len(pcs):
+        if len(pcs)/smooth > fr_min:
             
             xs_ = rsp.pfcs[0, pc_mask][pcs]
             ys_ = rsp.pfcs[1, pc_mask][pcs]
             
-            if med_abs_dev(xs_) < mad_max:
+            if med_abs_dev(xs_) < mad_max_x:
                 xs[ctr] = np.median(xs_)
                 
-            if med_abs_dev(ys_) < mad_max:
+            if med_abs_dev(ys_) < mad_max_y:
                 ys[ctr] = np.median(ys_)
                 
     return ts, xs, ys
