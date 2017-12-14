@@ -55,7 +55,7 @@ def ntwk(
     :param verbose: whether to print out frame-building progress
     :param report_every: how often to report progress if verbose is True (s)
     
-    :return: list of paths to frames
+    :return: list of paths to frames, extra info about frames
     """
     alert = lambda m: print(m) if verbose else None
     alert('\n')
@@ -285,74 +285,82 @@ def ntwk(
     plt.close()
     
     alert('All frames written to disk.')
+    
+    extra = {
+        'fig_size': (fig_w, fig_h),
+    }
         
-    return frames
+    return frames, extra
 
 
 def traj(
-        save_prfx, time_file, traj_file, fps=30, decay=0.5,
-        location_size=2000, path_size=200, location_color=(0, 0, 1, .3), 
-        path_color=(0, 0, 0),
-        cov_cutoff=None, cov_color=(0, 1, 0, .3), cov_scale=3,
-        box=None, title='', x_label='', y_label='', fig_size=(6.4, 4.8),
-        show_timestamp=True, font_size=16, verbose=False):
+        frame_prfx, traj, t_start, t_end, box, fig_w, fig_h,
+        loc_size=1000, path_size=100,
+        loc_color=(0, 0, 1, .3), path_color=(0, 0, 0), decay=0.5,
+        x_ticks=None, y_ticks=None, x_tick_labels=None, y_tick_labels=None,
+        x_label='', y_label='', title='', font_size=16,
+        fps=30, show_timestamp=True, verbose=False, report_every=60):
     """
     Convert a time-series of positions into a series of still frames.
     
-    :param save_prfx: prfx of frame files
-    :param time_file: file with dict containing the following fields:
-        'timestamps': 1-D array containing timestamps corresponding to neural activity
-        'fs': scalar sampling frequency
-    :param traj_file: file with dict containing the following fields:
-        'xys': 2-D array containing (x, y) coordinates of each position over time; rows are
-            time points, cols are x and y
-        ['covs']: optional 3-D array containing uncertainty (covariance) matrix at each time
-            point 
-    :param fps: frame rate
-    :param location_size: size of current location marker
-    :param path_size: size of markers indicating recent path
-    :param location_color: color of current location marker
-    :param path_color: color of markers indicating recent path (note: rgb, not rgba)
-    :param cov_cutoff: maximum covariance value allowed (in squared units) when showing
-        uncertainty ellipse of position estimate; if None, uncertainty ellipse is not shown
-    :param cov_color: rgba color of covariance ellipse
-    :param cov_scale: size of ellipse relative to square root of covariance values
-    :param box: bounding box to display path in
-    :param show_timestamp: whether or not to show timestamp in figure title
-    :param fig_size: size of figure to make
-    :param verbose: whether or not to print progress details
+    :param frame_prfx: prfx of frame files
+    :param traj: traj object with attributes ts, xys
+    :param t_start: start time of animation
+    :param t_end: end time of animation
+    :param box: bounding box for displaying cells
+    :param fig_w: figure width
+    :param fig_h: figure height
+        at least fig_w or fig_h must be provided; the other can be
+        calculated automatically from box
+    :param loc_size: size of current location indicator
+    :param path_size: size of trailing path
+    :param loc_color: color of current lcoation indicator
+    :param path_color: color of trailing path
+    :param decay: decay time constant of path (s)
+    :params x_ticks, y_ticks, x_tick_labels, y_tick_labels: as in matplotlib
+    :params x_label, y_label, title: as in matplotlib
+    :param font_size: font size
+    :param fps: frame rate of animation (frames per second)
+    :param show_timestamp: whether to append current timestamp below title
+    :param verbose: whether to print out frame-building progress
+    :param report_every: how often to report progress if verbose is True (s)
+    
+    :return: list of paths to frames, extra info about frames
     """
+    alert = lambda m: print(m) if verbose else None
+    alert('\n')
     
-    # load time stamps
-    ts, fs = load_time_file(time_file)
+    # get timestamps
+    ts = traj.ts
+    dt = np.mean(np.diff(ts))
+    fs = 1/dt
+    
+    xys = traj.xys
+    
+    if t_start is None:
+        t_start = ts[0] - dt
+    if t_end is None:
+        t_end = ts[-1] + dt
 
-    # load trajectory data
-    data_tr = load(traj_file)
+    # select data only in desired time window
+    t_mask = (t_start <= ts) & (ts < t_end)
     
-    # make sure traj file contains required keys
-    if 'xys' not in data_tr:
-        raise KeyError('Item with key "xys" not found in file "{}".'.format(traj_file))
-        
-    if (cov_cutoff is not None) and ('covs' not in data_tr):
-        
-        raise KeyError(
-            'When "cov_cutoff" is not None, key "covs" must be included '
-            'in file "{}".'.format(traj_file))
-        
-    xys = data_tr['xys']
-    covs = data_tr['covs'] if cov_cutoff is not None else None
-        
+    assert t_mask.sum() > 0
+    
+    ts = ts[t_mask]
+    xys = xys[t_mask]
+    
     # downsample data if necessary
     if fps < fs:
+        alert('Downsampling data from {} to {} fps...'.format(fs, fps))
         
         n_down = int(round((ts[-1] - ts[0]) * fps))
+        
         ts = downsample_ma(ts, n_down)
-
         xys = downsample_ma(xys, n_down)
         
-        if covs is not None:
-            covs = downsample_ma(covs, n_down)
-    
+        alert('Downsampled.\n')
+        
     # convert xys to two 1D arrays
     xs, ys = xys.T
 
@@ -377,11 +385,18 @@ def traj(
     box = correct_box_dims(box)
 
     # make sure save directory exists
-    save_dir = os.path.dirname(save_prfx)
+    save_dir = os.path.dirname(frame_prfx)
     if not os.path.exists(save_dir): os.makedirs(save_dir)
         
     # set up figure
-    fig, ax = plt.subplots(1, 1, figsize=fig_size, tight_layout=True)
+    aspect = (box[3] - box[2]) / (box[1] - box[0])
+    
+    if fig_h is None:
+        fig_h = fig_w * aspect
+    elif fig_w is None:
+        fig_w = fig_h / aspect
+        
+    fig, ax = plt.subplots(1, 1, figsize=(fig_w, fig_h), tight_layout=True)
     
     ax.set_xlim(box[:2])
     ax.set_ylim(box[2:])
@@ -392,20 +407,18 @@ def traj(
     set_font_size(ax, font_size)
     
     # plot current position
-    sca_2 = ax.scatter(xs[0], ys[0], s=location_size, c=location_color, lw=0, zorder=1)
-    
-    # plot uncertainty (covariance) ellipse
-    if covs is not None:
-        unc = ellipse_from_cov(xys[0], covs[0], cov_scale, cov_color)
-        
-        if unc is not None:
-            ax.add_artist(unc)
-            
-            if np.trace(covs[0]) >= cov_cutoff:
-                unc.set_alpha(0)
+    sca_2 = ax.scatter(
+        xs[0], ys[0], s=loc_size, c=loc_color, lw=0, zorder=1)
     
     # loop over frames
-    save_files = []
+    alert(
+        'Generating and saving {0} frames spanning times {1:.6f} to {2:.6f} s'
+        '...'.format(len(ts), ts[0], ts[-1]))
+    
+    frames = []
+    
+    loop_start_time = time.time()
+    last_update = time.time()
     
     for f_ctr, (t, (x, y)) in enumerate(zip(ts, xys)):
         
@@ -414,43 +427,208 @@ def traj(
         
         # plot trailing path
         colors = [path_color + (alpha,) for alpha in alphas]
-        sca = ax.scatter(xs[:f_ctr+1], ys[:f_ctr+1], s=path_size, color=colors, lw=0, zorder=0)
+        sca = ax.scatter(
+            xs[:f_ctr+1], ys[:f_ctr+1], s=path_size, color=colors, lw=0, zorder=0)
             
         # plot current location
         sca_2.set_offsets([x, y])
         
-        # plot covariance ellipse
-        if covs is not None:
-            if unc is not None:
-                unc.remove()
-                
-            unc = ellipse_from_cov([x, y], covs[f_ctr], cov_scale, cov_color)
-        
-            if unc is not None:
-                ax.add_artist(unc)
-
-                if np.trace(covs[f_ctr]) >= cov_cutoff:
-                    unc.set_alpha(0)
-        
         if show_timestamp:
-            if title:
-                ax.set_title('{0}\nt = {1:.3f} s'.format(title, t), fontsize=font_size)
-            else:
-                ax.set_title('t = {0:.3f} s'.format(t), fontsize=font_size)
+            title_ = '{0}\nt = {1:.3f} s'.format(title, t)
+            ax.set_title(title_, fontsize=font_size)
             
         plt.draw()
         
-        save_file = '{}_{}.png'.format(save_prfx, f_ctr+1)
-        save_files.append(save_file)
+        frame = '{}_{}.png'.format(frame_prfx, f_ctr+1)
+        frames.append(frame)
         
-        fig.savefig(save_file)
+        fig.savefig(frame)
+        
+        if time.time() > last_update + report_every:
+            
+            alert('{0} frames completed after {1:.3f} s...'.format(
+                f_ctr + 1, time.time() - loop_start_time)) 
+            
+            last_update = time.time()
         
         # remove trailing path so it doesn't interfere with next frame
         sca.remove()
-        
+    
+    alert('All frames written to disk.')
+    
     plt.close()
+    extra = {}
+    
+    return frames, extra
+
+
+def meta(
+        frame_prfx, meta, t_start, t_end, box, fig_w, fig_h,
+        text_xys, colors, title='', font_size=16, title_font_size=16,
+        fps=30, show_timestamp=True, verbose=False, report_every=60):
+    """
+    Convert a time-series of positions into a series of still frames.
+    
+    :param frame_prfx: prfx of frame files
+    :param traj: traj object with attributes ts, xys
+    :param t_start: start time of animation
+    :param t_end: end time of animation
+    :param box: bounding box for displaying cells
+    :param fig_w: figure width
+    :param fig_h: figure height
+        at least fig_w or fig_h must be provided; the other can be
+        calculated automatically from box
+    :param text_xys: dict of text x, y positions (keys should be same
+        as meta.labels.keys(), meta.indicators.keys())
+    :param colors: dict of colors with same keys as text_xys
+    :param font_size: font size
+    :param fps: frame rate of animation (frames per second)
+    :param show_timestamp: whether to append current timestamp below title
+    :param verbose: whether to print out frame-building progress
+    :param report_every: how often to report progress if verbose is True (s)
+    
+    :return: list of paths to frames, extra info about frames
+    """
+    alert = lambda m: print(m) if verbose else None
+    alert('\n')
+    
+    # get timestamps
+    ts = meta.ts
+    dt = np.mean(np.diff(ts))
+    fs = 1/dt
+    
+    texts = meta.texts
+    indicators = meta.indicators
+    
+    if t_start is None:
+        t_start = ts[0] - dt
+    if t_end is None:
+        t_end = ts[-1] + dt
+
+    # select data only in desired time window
+    t_mask = (t_start <= ts) & (ts < t_end)
+    
+    assert t_mask.sum() > 0
+    
+    ts = ts[t_mask]
+    indicators = {
+        key: indicator[t_mask]
+        for key, indicator in indicators.items()
+    }
+    
+    # downsample data if necessary
+    if fps < fs:
+        alert('Downsampling data from {} to {} fps...'.format(fs, fps))
         
-    return save_files
+        n_down = int(round((ts[-1] - ts[0]) * fps))
+        
+        ts = downsample_ma(ts, n_down)
+        
+        indicators = {
+            key: downsample_spks(indicator[:, None], n_down)[:, 0]
+            for key, indicator in indicators.items()
+        }
+        
+        alert('Downsampled.\n')
+        
+    # automatically compute box size if not provided
+    if box is None:
+        x_min = xs.min()
+        x_max = xs.max()
+        x_r = x_max - x_min
+        
+        y_min = ys.min()
+        y_max = ys.max()
+        y_r = y_max - y_min
+        
+        box = [
+            x_min - 0.1*x_r,
+            x_max + 0.1*x_r,
+            y_min - 0.1*y_r,
+            y_max + 0.1*y_r,
+        ]
+    
+    # automatically adjust box if either dimension is zero
+    box = correct_box_dims(box)
+
+    # make sure save directory exists
+    save_dir = os.path.dirname(frame_prfx)
+    if not os.path.exists(save_dir): os.makedirs(save_dir)
+        
+    # set up figure
+    aspect = (box[3] - box[2]) / (box[1] - box[0])
+    
+    if fig_h is None:
+        fig_h = fig_w * aspect
+    elif fig_w is None:
+        fig_w = fig_h / aspect
+        
+    fig, ax = plt.subplots(1, 1, figsize=(fig_w, fig_h), tight_layout=True)
+    
+    ax.set_xlim(box[:2])
+    ax.set_ylim(box[2:])
+    
+    ax.set_xticks([])
+    ax.set_yticks([])
+    
+    set_font_size(ax, title_font_size)
+    
+    # loop over frames
+    alert(
+        'Generating and saving {0} frames spanning times {1:.6f} to {2:.6f} s'
+        '...'.format(len(ts), ts[0], ts[-1]))
+    
+    frames = []
+    
+    loop_start_time = time.time()
+    last_update = time.time()
+    
+    # set initial text objects
+    text_objs = {}
+    for key, text in texts.items():
+        
+        x, y = text_xys[key]
+        color = colors[key]
+        
+        text_ = ax.text(x, y, text, fontsize=font_size, color=color)
+        text_.set_alpha(0)
+        
+        text_objs[key] = text_
+    
+    for f_ctr, t in enumerate(ts):
+        
+        # update texts
+        for key, text_ in text_objs.items():
+            
+            if indicators[key][f_ctr]:
+                text_.set_alpha(1)
+            else:
+                text_.set_alpha(0)
+            
+        if show_timestamp:
+            title_ = '{0}\nt = {1:.3f} s'.format(title, t)
+            ax.set_title(title_, fontsize=title_font_size)
+            
+        plt.draw()
+        
+        frame = '{}_{}.png'.format(frame_prfx, f_ctr+1)
+        frames.append(frame)
+        
+        fig.savefig(frame)
+        
+        if time.time() > last_update + report_every:
+            
+            alert('{0} frames completed after {1:.3f} s...'.format(
+                f_ctr + 1, time.time() - loop_start_time)) 
+            
+            last_update = time.time()
+        
+    alert('All frames written to disk.')
+    
+    plt.close()
+    extra = {}
+    
+    return frames, extra
 
 
 def correct_box_dims(box):
@@ -480,34 +658,6 @@ def correct_box_dims(box):
 
     return box
                         
-
-def ellipse_from_cov(xy, cov, scale, color):
-    """
-    Return an ellipse object from a covariance matrix. Add it to an axis
-    using ax.add_artist(ell), and remove it using ell.remove().
-    
-    :param cov: 2x2 covariance matrix
-    :param scale: how much to scale the covariance stds to get width and height
-    :param color: rgba color of ellipse
-    :return: ellipse object
-    """
-    if np.any(np.isnan(xy)) or np.any(np.isnan(cov)) or (np.trace(cov) == 0):
-        return None
-    
-    # get eigenvalues and vectors of covariance
-    evs, evecs = np.linalg.eig(cov)
-    
-    # correct evs for small numerical errors
-    evs = np.max([np.real(evs), [0, 0]], axis=0)
-    
-    # convert evs and evecs to ellipse parameters
-    width, height = scale*np.sqrt(evs)
-    angle = -np.arctan(evecs[0, 1]/evecs[0, 0]) * 180 / np.pi
-        
-    ell = Ellipse(xy, width=width, height=height, angle=angle, color=color)        
-    
-    return ell
-
 
 def w_to_line(w, mask, xys):
     """
