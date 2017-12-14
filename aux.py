@@ -5,6 +5,19 @@ from scipy.linalg import toeplitz
 cc = np.concatenate
 
 
+class Generic(object):
+    """Class for generic object."""
+    
+    def __init__(self, **kwargs):
+        
+        for k, v in kwargs.items():
+            self.__dict__[k] = v
+            
+    def __setattr__(self, k, v):
+        
+        raise Exception('Attributes may only be set at instantiation.')
+        
+        
 # FILE I/O
 
 def save(save_file, obj):
