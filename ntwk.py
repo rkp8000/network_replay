@@ -215,7 +215,7 @@ class LIFNtwk(object):
         self.ws_up_init = ws_up
 
     def run(
-            self, spks_up, dt, vs_0=None, gs_0=None, g_ahp_0=None,
+            self, spks_up, dt, vs_0=None, gs_0=None, g_ahp_0=None, i_ext=None,
             vs_forced=None, spks_forced=None, store=None, report_every=None):
         """
         Run a simulation of the network.
@@ -312,6 +312,9 @@ class LIFNtwk(object):
         spks = None
         gs = None
         g_ahp = None
+        
+        if (i_ext is None):
+            i_ext = np.zeros(len(ts))
         
         if store['vs'] is not None:
             vs = np.nan * np.zeros(sim_shape, dtype=store['vs'])
@@ -415,6 +418,7 @@ class LIFNtwk(object):
             g_ahp_prev = g_ahp_prev + dg_ahp
                   
             # calculate current input resulting from synaptic conductances
+            ## note: conductances are relative, so is_g are in volts
             is_g = [
                 gs_prev[syn] * (self.es_syn[syn] - vs_prev)
                 for syn in self.syns
@@ -422,9 +426,12 @@ class LIFNtwk(object):
             
             # add in AHP current
             is_g.append(g_ahp_prev * (self.e_ahp - vs_prev))
-
+            
+            # get total input current
+            is_all = np.sum(is_g, axis=0) + i_ext[step]
+            
             # update membrane potential
-            dvs = -(dt/self.t_m) * (vs_prev - self.e_l) + np.sum(is_g, axis=0)
+            dvs = -(dt/self.t_m) * (vs_prev - self.e_l) + is_all
             vs_prev = vs_prev + dvs
             
             # force refractory neurons to reset potential
