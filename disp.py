@@ -7,6 +7,10 @@ from aux import load, save
 from aux import load_time_file
 
 
+def print_red(text):
+    print('\x1b[31m{}\x1b[0m'.format(text))
+    
+    
 def set_font_size(ax, font_size, legend_font_size=None):
     """Set font_size of all axis text objects to specified value."""
 
