@@ -81,6 +81,15 @@ def join_w(targs, srcs, ws):
         
     n_targ = targ_shapes[0][0]
     n_src = src_shapes[0][0]
+    
+    # make sure weight matrix dimensions match sizes
+    # of targ/src classes
+    for syn, ws_ in ws.items():
+        for (targ, src), w_ in ws_.items():
+            if not w_.shape == (targs[targ].sum(), srcs[src].sum()):
+                raise Exception(
+                    'Weight matrix for {}: ({}, {}) does not match '
+                    'dimensionality specified by targ/src masks.')
         
     # loop through synapse types
     ws_full = {}
