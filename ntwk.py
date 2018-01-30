@@ -47,7 +47,7 @@ def make_local_cxns(pfcs, z_pc, l_pc):
     return cxns
 
 
-def combine_w(masks, ws):
+def join_w(masks, ws):
     """
     Combine multiple weight matrices specific to pairs of populations
     into a single, full set of weight matrices (one per synapse type).
