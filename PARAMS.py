@@ -80,7 +80,7 @@ T_G = 0.005  # (s)
 
 T_W = 1  # (s)
 T_C = 1.5  # (s)
-C_S = 5
+C_S = 10
 B_C = 0.2
 
 # SIMULATION
