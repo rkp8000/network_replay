@@ -9,7 +9,7 @@ from aux import save
 
 # CONNECTIVITY FUNCTIONS
 
-def cxns_pcs_rcr(pfcs, z_pc, l_pc):
+def make_local_cxns(pfcs, z_pc, l_pc):
     """
     Generate a recurrent connectivity matrix with preferential
     attachment between pyramidal cells with nearby place fields.
@@ -45,6 +45,59 @@ def cxns_pcs_rcr(pfcs, z_pc, l_pc):
     cxns = np.random.rand(n, n) < p
     
     return cxns
+
+
+def combine_w(masks, ws):
+    """
+    Combine multiple weight matrices specific to pairs of populations
+    into a single, full set of weight matrices (one per synapse type).
+    
+    :param masks: dict of boolean masks indicating cell identities
+    :param ws: dict of inter-population weight matrices, e.g.:
+        ws = {
+            'AMPA': {
+                ('EXC', 'EXC'): np.array([[...]]),
+                ('INH', 'EXC'): np.array([[...]]),
+            },
+            'GABA': {
+                ('EXC', 'INH'): np.array([[...]]),
+                ('INH', 'INH'): np.array([[...]]),
+            }
+        }
+        note: keys given as (targ, src)
+    
+    :return: ws_full, a dict of full ws, one per synapse
+    """
+    pops = masks.keys()
+    
+    # make sure all masks have same shape
+    mask_shapes = [mask.shape for mask in masks.values()]
+    
+    if len(set(mask_shapes)) > 1:
+        raise Exception('All masks must have same shape.')
+        
+    n = mask_shapes[0][0]
+        
+    # loop through synapse types
+    ws_full = {}
+    
+    for syn, ws_ in ws.items():
+        
+        w = np.zeros((n, n))
+        
+        # loop through population pairs
+        for (targ, src), w_ in ws_.items():
+            
+            # get mask of all cxns from src to targ
+            mask = np.outer(masks[targ], masks[src])
+            
+            assert mask.sum() == w_.size
+            
+            w[mask] = w_.flatten()
+            
+        ws_full[syn] = w
+        
+    return ws_full
 
 
 # INITIALIZATION HELPERS
