@@ -47,12 +47,13 @@ def make_local_cxns(pfcs, z_pc, l_pc):
     return cxns
 
 
-def join_w(masks, ws):
+def join_w(targs, srcs, ws):
     """
     Combine multiple weight matrices specific to pairs of populations
     into a single, full set of weight matrices (one per synapse type).
     
-    :param masks: dict of boolean masks indicating cell identities
+    :param targs: dict of boolean masks indicating targ cell classes
+    :param srcs: dict of boolean masks indicating source cell classes
     :param ws: dict of inter-population weight matrices, e.g.:
         ws = {
             'AMPA': {
@@ -68,28 +69,31 @@ def join_w(masks, ws):
     
     :return: ws_full, a dict of full ws, one per synapse
     """
-    pops = masks.keys()
+    # make sure all targ/src masks have same shape
+    targ_shapes = [mask.shape for mask in targs.values()]
+    src_shapes = [mask.shape for mask in srcs.values()]
     
-    # make sure all masks have same shape
-    mask_shapes = [mask.shape for mask in masks.values()]
-    
-    if len(set(mask_shapes)) > 1:
-        raise Exception('All masks must have same shape.')
+    if len(set(targ_shapes)) > 1:
+        raise Exception('All targ masks must have same shape.')
         
-    n = mask_shapes[0][0]
+    if len(set(src_shapes)) > 1:
+        raise Exception('All targ masks must have same shape.')
+        
+    n_targ = targ_shapes[0][0]
+    n_src = src_shapes[0][0]
         
     # loop through synapse types
     ws_full = {}
     
     for syn, ws_ in ws.items():
         
-        w = np.zeros((n, n))
+        w = np.zeros((n_targ, n_src))
         
         # loop through population pairs
         for (targ, src), w_ in ws_.items():
             
             # get mask of all cxns from src to targ
-            mask = np.outer(masks[targ], masks[src])
+            mask = np.outer(targs[targ], srcs[src])
             
             assert mask.sum() == w_.size
             
