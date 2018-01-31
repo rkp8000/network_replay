@@ -204,10 +204,20 @@ class LIFNtwk(object):
             )
 
         self.syns = list(es_syn.keys())
-
+        
         # check weight matrices have correct dims
-        self.n = list(ws_rcr.values())[0].shape[1]
+        shape_rcr = list(ws_rcr.values())[0].shape
+        shape_up = list(ws_up.values())[0].shape
+        
+        self.n = shape_rcr[1]
 
+        # fill in unspecified weight matrices with zeros
+        for syn in self.syns:
+            if syn not in ws_rcr:
+                ws_rcr[syn] = np.zeros(shape_rcr)
+            if syn not in ws_up:
+                ws_up[syn] = np.zeros(shape_up)
+        
         if not all([w.shape[0] == w.shape[1] == self.n for w in ws_rcr.values()]):
             raise ValueError('All recurrent weight matrices must be square.')
 
