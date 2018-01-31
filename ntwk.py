@@ -92,11 +92,12 @@ def join_w(targs, srcs, ws):
                     'dimensionality specified by targ/src masks.')
         
     # loop through synapse types
+    dtype = list(list(ws.values())[0].values())[0].dtype
     ws_full = {}
     
     for syn, ws_ in ws.items():
         
-        w = np.zeros((n_targ, n_src))
+        w = np.zeros((n_targ, n_src), dtype=dtype)
         
         # loop through population pairs
         for (targ, src), w_ in ws_.items():
