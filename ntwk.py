@@ -197,13 +197,6 @@ class LIFNtwk(object):
         if ws_rcr is None:
             ws_rcr = {}
 
-        # check syn. dicts have same keys
-        if not set(es_syn) == set(ts_syn) == set(ws_rcr) == set(ws_up):
-            raise ValueError(
-                'All synaptic dicts ("es_syn", "ts_syn", '
-                '"ws_rcr", "ws_inp") must have same keys.'
-            )
-
         self.syns = list(es_syn.keys())
         
         # check weight matrices have correct dims
@@ -219,6 +212,13 @@ class LIFNtwk(object):
             if syn not in ws_up:
                 ws_up[syn] = np.zeros(shape_up)
         
+        # check syn. dicts have same keys
+        if not set(es_syn) == set(ts_syn) == set(ws_rcr) == set(ws_up):
+            raise ValueError(
+                'All synaptic dicts ("es_syn", "ts_syn", '
+                '"ws_rcr", "ws_inp") must have same keys.'
+            )
+
         if not all([w.shape[0] == w.shape[1] == self.n for w in ws_rcr.values()]):
             raise ValueError('All recurrent weight matrices must be square.')
 
@@ -243,9 +243,10 @@ class LIFNtwk(object):
                     '(see LIFNtwk documentation).')
             # make sure there is one plasticity matrix for each synapse type
             if set(plasticity['masks']) != set(ws_up):
-                raise KeyError(
-                    'Argument "plasticity[\'masks\']" must contain same keys '
-                    '(synapse types) as argument "ws_up".')
+                for syn in ws_up:
+                    if syn not in plasticity['masks']:
+                        plasticity['masks'][syn] = np.zeros(
+                            (self.n, self.n_up), bool)
             # make sure plasticity matrices are boolean and same size as ws_up
             for w in plasticity['masks'].values():
                 if w.shape != (self.n, self.n_up):
@@ -595,7 +596,7 @@ class LIFNtwk(object):
         if self.plasticity is not None:
             if store['ws_plastic'] is None:
                 ws_plastic = {
-                    syn: ws_plastic_prev[syn].flatten()[:, None]
+                    syn: ws_plastic_prev[syn].flatten()[None, :]
                     for syn in self.syns
                 }
                 
