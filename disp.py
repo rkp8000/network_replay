@@ -1,4 +1,5 @@
 from copy import deepcopy
+import numpy as np
 import numbers
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="matplotlib")
@@ -25,6 +26,16 @@ def set_font_size(ax, font_size, legend_font_size=None):
             legend_font_size = font_size
         for text in ax.get_legend().get_texts():
             text.set_fontsize(legend_font_size)
+            
+            
+def spaced_colors(start, end, n):
+    """Return a set of uniformly spaced RGB values."""
+    
+    rs = np.linspace(start[0], end[0], n)
+    gs = np.linspace(start[1], end[1], n)
+    bs = np.linspace(start[2], end[2], n)
+    
+    return np.array([rs, gs, bs]).T
 
 
 def raster(ax, ts, spks, order=None, **scatter_kwargs):
