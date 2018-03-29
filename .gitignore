@@ -13,17 +13,17 @@ sandbox.ipynb
 temp*.ipynb
 *ipynb_checkpoints
 
-smlns/
-test_anim/
+*smlns/
+*test_anim/
 
 LOCAL.py
 
-anim/cache/*
+*anim/cache/*
 
-lin_ridge/search_config/*
-lin_ridge/rslts_pre/*
-lin_ridge/cache/*
+*lin_ridge/search_config/*
+*lin_ridge/rslts_pre/*
+*lin_ridge/cache/*
 
-!lin_ridge/search_config/test_*
-!lin_ridge/search_config/template_*
+!*lin_ridge/search_config/test_*
+!*lin_ridge/search_config/template_*
 
