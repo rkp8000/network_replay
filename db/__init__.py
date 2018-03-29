@@ -24,7 +24,7 @@ def make_session():
         raise NameError(
             'Specify user, pw, and db in "LOCAL.py".')
 
-    url = 'postgres://{}:{}@/{}'.format(user, pw, db)
+    url = 'postgres://{}:{}@localhost:5432/{}'.format(user, pw, db)
 
     # make and connect an engine
     engine = create_engine(url)
