@@ -5,3 +5,24 @@ from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
+
+
+class SmlnRslt(Base):
+    
+    __tablename__ = 'smln_rslt'
+    
+    id = Column(Integer, primary_key=True)
+    group = Column(String)
+    
+    params = Column(JSONB)
+    s_params = Column(JSONB)
+    apxn = Column(JSONB)
+    metrics = Column(JSONB)
+    
+    ntwk_file = Column(String)
+    smln_included = Column(Boolean)
+    
+    parent_id = Column(Integer, ForeignKey('smln_rslt.id'))
+    parent = relation('SmlnRslt', remote_side=[id])
+    
+    commit = Column(String)
