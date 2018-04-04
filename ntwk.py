@@ -237,7 +237,7 @@ class LIFNtwk(object):
         if plasticity is not None:
             # make sure all parameters are given
             if set(plasticity) != {
-                    'masks', 'w_ec_ca3_maxs', 'T_W', 'T_C', 'C_S', 'BETA_C'}:
+                    'masks', 'w_pc_st_maxs', 'T_W', 'T_C', 'C_S', 'B_C'}:
                 raise KeyError(
                     'Argument "plasticity" must contain the correct keys '
                     '(see LIFNtwk documentation).')
@@ -258,9 +258,9 @@ class LIFNtwk(object):
                         'All matrices in "plasticity[\'masks\']" must be '
                         'logical arrays.')
             # make sure max weight values dict has correct synaptic keys
-            if set(plasticity['w_ec_ca3_maxs']) != set(ws_up):
+            if set(plasticity['w_pc_st_maxs']) != set(ws_up):
                 raise KeyError(
-                    'Argument "plasticity[\'w_ec_ca3_maxs\']" must contain same '
+                    'Argument "plasticity[\'w_pc_st_maxs\']" must contain same '
                     'keys (synapse types) as argument "ws_up".')
         
         # make sure v_reset is actually an array
@@ -420,11 +420,11 @@ class LIFNtwk(object):
             
             # rename variables to make them more accessible
             masks_plastic = self.plasticity['masks']
-            w_ec_ca3_maxs = self.plasticity['w_ec_ca3_maxs']
+            w_pc_st_maxs = self.plasticity['w_pc_st_maxs']
             t_w = self.plasticity['T_W']
             t_c = self.plasticity['T_C']
             c_s = self.plasticity['C_S']
-            beta_c = self.plasticity['BETA_C']
+            b_c = self.plasticity['B_C']
             
             # set initial values for plasticity and spk ctr
             ws_plastic_prev = {
@@ -553,8 +553,8 @@ class LIFNtwk(object):
                     # update weight values
                     ws_plastic_prev[syn] = update_plastic_weights(
                         cs=cs_prev_syn, ws_prev=ws_plastic_prev[syn],
-                        c_s=c_s, beta_c=beta_c, t_w=t_w,
-                        w_ec_ca3_max=w_ec_ca3_maxs[syn], dt=dt)
+                        c_s=c_s, b_c=b_c, t_w=t_w,
+                        w_pc_st_max=w_pc_st_maxs[syn], dt=dt)
 
                 # insert updated weights into ws_up
                 for syn, mask in masks_plastic.items():
@@ -607,8 +607,8 @@ class LIFNtwk(object):
             cs=cs, ws_plastic=ws_plastic, masks_plastic=masks_plastic)
 
 
-def z(c, c_s, beta_c):
-    return 1 / (1 + np.exp(-(c - c_s)/beta_c))
+def z(c, c_s, b_c):
+    return 1 / (1 + np.exp(-(c - c_s)/b_c))
 
 
 def update_spk_ctr(spks, cs_prev, t_c, dt):
@@ -624,23 +624,23 @@ def update_spk_ctr(spks, cs_prev, t_c, dt):
     return cs_prev + dc
 
 
-def update_plastic_weights(cs, ws_prev, c_s, beta_c, t_w, w_ec_ca3_max, dt):
+def update_plastic_weights(cs, ws_prev, c_s, b_c, t_w, w_pc_st_max, dt):
     """
-    Update the plastic cxns from EC to CA3.
+    Update the plastic cxns from ST to PC.
     
     :param cs: spk-ctrs for all cells at current time step
     :param ws_prev: 1-D array of plastic weight values at previous timestep
     :param c_s: spk-ctr threshold (see parameters.ipynb)
-    :param beta_c: spk-ctr nonlinearity slope (see parameters.ipynb)
-    :param t_w: weight change timescale (see parameters.ipynb)
-    :param w_ec_ca3_max: syn-dict of maximum EC->CA3 weight values
+    :param b_c: spk-ctr nonlinearity slope (see dynamics.ipynb)
+    :param t_w: weight change timescale (see dynamics.ipynb)
+    :param w_pc_st_max: syn-dict of maximum ST->PC weight values
     :param dt: numerical integration time step
     """
     if cs.shape != ws_prev.shape:
         raise ValueError(
             'Spk-ctr "cs" and plastic weights "ws_prev" must have same shape.')
         
-    dw = z(cs, c_s, beta_c) * (w_ec_ca3_max - ws_prev) * dt / t_w 
+    dw = z(cs, c_s, b_c) * (w_pc_st_max - ws_prev) * dt / t_w 
     return ws_prev + dw
 
 
