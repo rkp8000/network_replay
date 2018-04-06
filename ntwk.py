@@ -7,113 +7,6 @@ import time
 from aux import save
 
 
-# CONNECTIVITY FUNCTIONS
-
-def make_local_cxns(pfcs, z_pc, l_pc):
-    """
-    Generate a recurrent connectivity matrix with preferential
-    attachment between pyramidal cells with nearby place fields.
-    
-    :param pfcs: (2 x N) array of place field centers (cells without place fields
-        should have nans in their place)
-    :param z_pc: normalization factor for connections
-    :param l_pc: length scale of preferential attachment (m)
-    :return: N x N boolean cxn matrix
-    """
-    # check args
-    if len(pfcs) != 2:
-        raise ValueError('Arg "pfs" must have two rows.')
-    if l_pc <= 0:
-        raise ValueError('Arg "l_pc" must be > 0.')
-    
-    # get number of cells
-    n = pfcs.shape[1]
-    
-    # build distance matrix
-    dx = np.tile(pfcs[0][None, :], (n, 1)) - np.tile(pfcs[0][:, None], (1, n))
-    dy = np.tile(pfcs[1][None, :], (n, 1)) - np.tile(pfcs[1][:, None], (1, n))
-    d = np.sqrt(dx**2 + dy**2)
-    
-    # build cxn probability matrix
-    p = z_pc*np.exp(-d/l_pc)
-    
-    # set nans and diagonal to zero
-    p[np.eye(n, dtype=bool)] = 0
-    p[np.isnan(p)] = 0
-    
-    # build cxn matrix
-    cxns = np.random.rand(n, n) < p
-    
-    return cxns
-
-
-def join_w(targs, srcs, ws):
-    """
-    Combine multiple weight matrices specific to pairs of populations
-    into a single, full set of weight matrices (one per synapse type).
-    
-    :param targs: dict of boolean masks indicating targ cell classes
-    :param srcs: dict of boolean masks indicating source cell classes
-    :param ws: dict of inter-population weight matrices, e.g.:
-        ws = {
-            'AMPA': {
-                ('EXC', 'EXC'): np.array([[...]]),
-                ('INH', 'EXC'): np.array([[...]]),
-            },
-            'GABA': {
-                ('EXC', 'INH'): np.array([[...]]),
-                ('INH', 'INH'): np.array([[...]]),
-            }
-        }
-        note: keys given as (targ, src)
-    
-    :return: ws_full, a dict of full ws, one per synapse
-    """
-    # make sure all targ/src masks have same shape
-    targ_shapes = [mask.shape for mask in targs.values()]
-    src_shapes = [mask.shape for mask in srcs.values()]
-    
-    if len(set(targ_shapes)) > 1:
-        raise Exception('All targ masks must have same shape.')
-        
-    if len(set(src_shapes)) > 1:
-        raise Exception('All targ masks must have same shape.')
-        
-    n_targ = targ_shapes[0][0]
-    n_src = src_shapes[0][0]
-    
-    # make sure weight matrix dimensions match sizes
-    # of targ/src classes
-    for syn, ws_ in ws.items():
-        for (targ, src), w_ in ws_.items():
-            if not w_.shape == (targs[targ].sum(), srcs[src].sum()):
-                raise Exception(
-                    'Weight matrix for {}: ({}, {}) does not match '
-                    'dimensionality specified by targ/src masks.')
-        
-    # loop through synapse types
-    dtype = list(list(ws.values())[0].values())[0].dtype
-    ws_full = {}
-    
-    for syn, ws_ in ws.items():
-        
-        w = np.zeros((n_targ, n_src), dtype=dtype)
-        
-        # loop through population pairs
-        for (targ, src), w_ in ws_.items():
-            
-            # get mask of all cxns from src to targ
-            mask = np.outer(targs[targ], srcs[src])
-            
-            assert mask.sum() == w_.size
-            
-            w[mask] = w_.flatten()
-            
-        ws_full[syn] = w
-        
-    return ws_full
-
-
 # INITIALIZATION HELPERS
 
 def spks_forced_rand(ntwk, mask, itvl, freq, dt):
@@ -142,7 +35,7 @@ def spks_forced_rand(ntwk, mask, itvl, freq, dt):
     return np.concatenate([buf, spks_forced])
 
 
-# NETWORK CLASSES AND FUNCTIONS
+# NETWORK CLASS AND FUNCTIONS
 
 class LIFNtwk(object):
     """

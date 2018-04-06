@@ -118,6 +118,21 @@ def find_segs(x):
 
 # MATH
 
+def sgmd(x):
+    """Sigmoid (logistic) function."""
+    return 1 / (1 + np.exp(-x))
+
+
+def lognormal_mu_sig(mean, std):
+    """Get log-normal params from mean and std."""
+    b = 1 + (std**2)/(mean**2)
+    
+    mu = np.log(mean/np.sqrt(b))
+    sig = np.sqrt(np.log(b))
+    
+    return mu, sig
+
+
 def running_mean(x, wdw):
     """
     Return a running average of the same length as x, 

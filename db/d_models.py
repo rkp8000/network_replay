@@ -18,6 +18,7 @@ class SmlnRslt(Base):
     s_params = Column(JSONB)
     apxn = Column(JSONB)
     metrics = Column(JSONB)
+    success = Column(Boolean)
     
     ntwk_file = Column(String)
     smln_included = Column(Boolean)
