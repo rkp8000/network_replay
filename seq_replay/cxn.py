@@ -23,18 +23,15 @@ def make_w_e_pc_pc(pfxs, pfys, p):
     prb = np.clip(p['Z_PC_PC'] * np.exp(-d/p['L_PC_PC']), 0, 1)
     
     ## set diagonals to zero
-    prb[np.eye(n_pc, dtype=bool)] = 0
+    np.fill_diagonal(prb, False)
     
-    ## build cxn matrix
+    ## build cxn matrix from cxn prb
     c = np.random.rand(n, n) < prb
     
     # assign weights
-    w = np.zeros(c.shape)
+    w = np.zeros((n, n))
     w[c] = np.random.lognormal(
         *lognormal_mu_sig(p['W_E_PC_PC'], p['S_E_PC_PC']), c.sum())
-    
-    if np.any(np.isnan(w)):
-        raise ValueError('NaNs detected in weight matrix.')
     
     return w
 
@@ -64,9 +61,6 @@ def make_w_e_inh_pc(pfxs_inh, pfys_inh, pfxs_pc, pfys_pc, p):
     w = np.zeros(c.shape)
     w[c] = np.random.lognormal(
         *lognormal_mu_sig(p['W_E_INH_PC'], p['S_E_INH_PC']), c.sum())
-    
-    if np.any(np.isnan(w)):
-        raise ValueError('NaNs detected in weight matrix.')
     
     return w
     
@@ -98,9 +92,6 @@ def make_w_i_pc_inh(pfxs_pc, pfys_pc, pfxs_inh, pfys_inh, p):
     w = np.zeros(c.shape)
     w[c] = np.random.lognormal(
         *lognormal_mu_sig(p['W_I_PC_INH'], p['S_I_PC_INH']), c.sum())
-    
-    if np.any(np.isnan(w)):
-        raise ValueError('NaNs detected in weight matrix.')
     
     return w
 
