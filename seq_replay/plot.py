@@ -3,6 +3,7 @@ Plotting functions for replay smln rslts.
 """
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -163,21 +164,70 @@ def raster(rslt, xys, nearest, epoch):
     :param epoch: 'replay', 'wdw', 'trj', or 'full', specifying which epoch
         to make raster for (replay, detection window, trajectory, or full smln)
     """
-    fig, ax = plt.subplots(1, 1, figsize=(15, 5), tight_layout=True)
-    
     # get ordered idxs of PCs to plot
-    pc_idxs = ...
+    ## get pfs
+    pc_mask = rslt.ntwk.types_rcr == 'PC'
+    pfxs = rslt.ntwk.pfxs[pc_mask]
+    pfys = rslt.ntwk.pfys[pc_mask]
     
-    # get spks
-    spk_t_idxs, pcs = ...
-    spk_ts = ...
+    ## loop through (x, y) pairs and add idxs of nearest PCs
+    pc_idxs = []
+    for xy in xys:
+        # get dists of all PFs to (x, y)
+        dx = pfxs - xy[0]
+        dy = pfys - xy[1]
+        d = np.sqrt(dx**2 + dy**2)
+        
+        # add idxs of closest neurons to list
+        pc_idxs.extend(list(d.argsort()[:nearest]))
     
-    # plot spks
-    ax.scatter(spk_ts, pcs, c='k', s=10, marker='|', lw=0.5)
+    # get all spks for selected PCs
+    spks_pc_chosen = rslt.spks[:, pc_idxs]
     
-    ax.set_xlabel('t (s)')
-    ax.set_ylabel('spk idx')
-    ax.set_title('Raster plot for selected cells')
+    # get desired time window
+    if epoch == 'replay':
+        start = rslt.s_params['schedule']['REPLAY_EPOCH_START_T']
+        end = rslt.s_params['schedule']['SMLN_DUR']
+    elif epoch == 'wdw':
+        start = rslt.s_params['schedule']['TRG_START_T']
+        end = start + rslt.s_params['metrics']['WDW']
+    elif epoch == 'trj':
+        start = rslt.s_params['schedule']['TRJ_START_T']
+        end = rslt.s_params['schedule']['REPLAY_EPOCH_START_T']
+    elif epoch == 'full':
+        start = 0
+        end = rslt.s_params['schedule']['SMLN_DUR']
     
-    set_font_size(ax, 16)
+    t_mask = (start <= rslt.ts) & (rslt.ts < end)
+    t_start = rslt.ts[t_mask][0]
+    
+    spk_t_idxs, pcs = spks_pc_chosen[t_mask].nonzero()
+    spk_ts = spk_t_idxs * rslt.s_params['DT'] + t_start
+    
+    # make plots
+    fig = plt.figure(figsize=(16, 4), tight_layout=True)
+    gs = gridspec.GridSpec(1, 4)
+    
+    ## spks
+    ax_0 = fig.add_subplot(gs[:3])
+    ax_0.scatter(spk_ts, pcs, c='k', s=10, marker='|', lw=0.5)
+    
+    ax_0.set_xlabel('t (s)')
+    ax_0.set_ylabel('PC idx')
+    ax_0.set_title('Raster plot for selected cells')
+    
+    ## cell PF locations
+    ax_1 = fig.add_subplot(gs[3])
+    ax_1.scatter(pfxs, pfys, c='k', s=25, lw=0)
+    
+    ax_1.scatter(
+        pfxs[pc_idxs], pfys[pc_idxs], c=np.linspace(0, 1, len(pc_idxs)),
+        s=25, lw=0, vmin=0, vmax=1, cmap='spring')
+    
+    ax_1.set_xlabel('x (m)')
+    ax_1.set_ylabel('y (m)')
+    ax_1.set_title('PC PF locations')
+    
+    for ax in [ax_0, ax_1]:
+        set_font_size(ax, 16)
     

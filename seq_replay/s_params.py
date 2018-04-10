@@ -19,24 +19,19 @@ s_params = {
     'SPEED': .15,
     
     'schedule': {
-        'SMLN_DUR':,
-        'TRJ_START_T':,
-        'REPLAY_EPOCH_START_T':,
-        'TRG_START_T':,
+        'SMLN_DUR': 22,
+        'TRJ_START_T': 1,
+        'REPLAY_EPOCH_START_T': 20,
+        'TRG_START_T': 21,
     },
     
     'metrics': {
-        'RADIUS':,
-        'PITCH':,
+        'RADIUS': 0.2,
+        'PITCH': 10,
         'MIN_SCALE_TRJ': 1.25,
         'WDW': 0.1,
         'MIN_FRAC_SPK_TRJ': .75,
         'MAX_AVG_SPK_CT_TRJ': 3,
         'NON_TRJ_TRJ_SPK_RATIO': .75,
     },
-}
-
-apxn = {
-    'PITCH':,
-    'RADIUS':,
 }
