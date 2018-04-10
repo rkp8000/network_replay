@@ -1,12 +1,13 @@
 import numpy as np
 import time
+import sys
 
 from p_ranges import p_ranges, STD
 from s_params import s_params, apxn
 import smln
 
 
-def search(wait=None):
+def search(group, commit, wait=None):
 
     while True:
         p = sample_params()
@@ -42,4 +43,12 @@ def sample_params():
         
 
 if __name__ == '__main__':
-    search()
+    
+    if not (len(sys.argv) - 1) in range(2, 4):
+        raise Exception('2 or 3 arguments required.')
+        
+    group = sys.argv[1]
+    commit = sys.argv[2]
+    wait = int(sys.argv[3]) if len(sys.argv) == 4 else None
+    
+    search(group, commit, wait)

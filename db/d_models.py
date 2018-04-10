@@ -16,14 +16,16 @@ class SmlnRslt(Base):
     
     params = Column(JSONB)
     s_params = Column(JSONB)
-    apxn = Column(JSONB)
+    apxn = Column(Boolean)
+    
     metrics = Column(JSONB)
     success = Column(Boolean)
     
     ntwk_file = Column(String)
     smln_included = Column(Boolean)
     
+    commit = Column(String)
+ 
     parent_id = Column(Integer, ForeignKey('smln_rslt.id'))
     parent = relation('SmlnRslt', remote_side=[id])
     
-    commit = Column(String)

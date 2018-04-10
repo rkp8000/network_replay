@@ -4,6 +4,7 @@ smln params
 
 s_params = {
     'RNG_SEED': 0,
+    'DT': 0.0005,
     
     # trajectory
     'BOX_W': 2,
@@ -25,10 +26,13 @@ s_params = {
     },
     
     'metrics': {
-        'WDW':,
-        'FRAC_TAGGED_PPGN':,
-        'FRAC_BLOWUP':,
-        'MIN_SPKS_BLOWUP':,
+        'RADIUS':,
+        'PITCH':,
+        'MIN_SCALE_TRJ': 1.25,
+        'WDW': 0.1,
+        'MIN_FRAC_SPK_TRJ': .75,
+        'MAX_AVG_SPK_CT_TRJ': 3,
+        'NON_TRJ_TRJ_SPK_RATIO': .75,
     },
 }
 

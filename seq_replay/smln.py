@@ -5,7 +5,6 @@ from aux import lognormal_mu_sig, sgmd
 import cxn
 from db import make_session, d_models
 from ntwk import LIFNtwk
-from PARAMS import DT
 
 cc = np.concatenate
 
@@ -21,36 +20,44 @@ def run(p, s_params, apxn):
     schedule = deepcopy(s_params['schedule'])
     
     # adjust schedule if apxn used
-    if apxn is not None:
+    if apxn:
         schedule = fix_schedule(schedule)
-    
-    # build trajectory
-    t = np.arange(0, schedule['SMLN_DUR'], DT)
-    trj = build_trj(t, s_params, schedule)
     
     # build ntwk
     ntwk = build_ntwk(p, s_params)
     
+    # build trajectory
+    t = np.arange(0, schedule['SMLN_DUR'], s_params['DT'])
+    trj = build_trj(t, s_params, schedule)
+    
+    # get apx. real-valued mask ("veil") over trj nrns;
+    # values are >= 1 and correspond to apx. scale factors on
+    # corresponding ST->PC weights
+    trj_veil = get_trj_veil(trj, ntwk, p, s_params)
+    
     # approximate ST -> PC weights if desired
-    if apxn is not None:
-        # set STATE -> PC ntwk weights
-        ntwk = apxt_ws_up(trj, ntwk, p, s_params, apxn)
+    if apxn:
+        ntwk = apxt_ws_up(trj_veil, ntwk)
         
     spks_up, i_ext = build_stim(t, trj, ntwk, p, s_params, schedule)
     
-    rslt = ntwk.run(spks_up=spks_up, dt=DT, i_ext=i_ext)
+    rslt = ntwk.run(spks_up=spks_up, dt=s_params['DT'], i_ext=i_ext)
     
+    rslt.ntwk = ntwk
     rslt.schedule = schedule
-    
-    metrics, success = get_metrics(rslt)
-    rslt.metrics = metrics
-    rslt.success = success
     
     rslt.p = p
     rslt.s_params = s_params
     rslt.apxn = apxn
-    rslt.ntwk = ntwk
     
+    rslt.trj = trj
+    rslt.trj_veil = trj_veil
+    
+    metrics, success = get_metrics(rslt)
+    
+    rslt.metrics = metrics
+    rslt.success = success
+   
     return rslt
 
 
@@ -168,19 +175,28 @@ def build_ntwk(p, s_params):
     return ntwk
 
 
-def apxt_ws_up(trj, ntwk, p, s_params, apxn):
+def get_trj_veil(trj, ntwk, p, s_params):
+    """
+    Return a "veil" (positive real-valued mask) over cells in the ntwk
+    with place fields along the trajectory path.
+    """
+    # compute scale factor for all PCs
+    ## get distance to trj
+    d = dist_to_trj(trj['x'], trj['y'], ntwk.pfxs, ntwk.pfys)
+    
+    ## compute scale factor
+    g = np.maximum(1 - np.abs(d/s_params['RADIUS'])**s_params['PITCH'], 0)
+    veil = (1 - g) + g * p['A_P'] - 1
+    
+    return veil
+    
+    
+def apxt_ws_up(trj_veil, ntwk):
     """
     Replace ST->PC E weights with apxns expected following
     initial sensory input.
     """
-    # compute scale factor for all PCs
-    ## get distance to trj
-    d = dist_to_trj(trj['x'], trj['y'], ntwk.pfxs[:p['N_PC']], ntwk.pfys[:p['N_PC']])
-    
-    ## compute scale factor
-    g = np.maximum(1 - np.abs(d/apxn['RADIUS'])**apxn['PITCH'], 0)
-    scale = (1 - g) + g * p['A_P']
-    
+    scale = trj_veil[ntwk.types_rcr == 'PC'] + 1
     ntwk.ws_up_init['E'][ntwk.plasticity['masks']['E']] *= scale
     
     return ntwk
@@ -284,7 +300,7 @@ def build_stim(t, trj, ntwk, p, s_params, schedule):
         spks_up = add_spks_up_trj(trj, ntwk, spks_up, p, s_params, schedule)
     
     # fill in replay epoch STATE inputs
-    spks_up = add_spks_up_st(t, ntwk, spks_up, p, schedule)
+    spks_up = add_spks_up_st(t, ntwk, spks_up, p, s_params, schedule)
     
     # initialize upstream current array
     n_rcr = ntwk.ws_rcr['E'].shape[1]
@@ -304,12 +320,12 @@ def add_spks_up_trj(trj, ntwk, spks_up, p, s_params, schedule):
     another horizontal leg.
     """
     # convert to upstream spks
-    spks_up_trj = spks_up_from_trj(trj, ntwk, p)
+    spks_up_trj = spks_up_from_trj(trj, ntwk, p, s_params)
     
     return spks_up + spks_up_trj
 
 
-def spks_up_from_trj(trj, ntwk, p):
+def spks_up_from_trj(trj, ntwk, p, s_params):
     """
     Generate trajectory-driven upstream spk rates.
     """
@@ -337,13 +353,13 @@ def spks_up_from_trj(trj, ntwk, p):
     spk_rs = rs_d * fs
     
     # get spks
-    spks_temp = np.random.poisson(spk_rs * DT)
+    spks_temp = np.random.poisson(spk_rs * s_params['DT'])
     
     # convert to full-sized input upstream input array
     return cc([spks_tmp, np.zeros(spks_temp.shape, int)], axis=1)
 
 
-def add_spks_up_st(t, ntwk, spks_up, p, schedule):
+def add_spks_up_st(t, ntwk, spks_up, p, s_params, schedule):
     """
     Add ST --> PC spks to upstream spk array.
     """
@@ -351,12 +367,12 @@ def add_spks_up_st(t, ntwk, spks_up, p, schedule):
     if schedule['REPLAY_EPOCH_START_T'] > 0:
         mask = t <= schedule['REPLAY_EPOCH_START_T']
         spks_up[:mask.sum(), p['N_PC']:] += np.random.poisson(
-            p['R_TRJ_PC_ST'] * DT, (mask.sum(), p['N_PC']))
+            p['R_TRJ_PC_ST'] * s_params['DT'], (mask.sum(), p['N_PC']))
         
     # replay epoch
     mask = schedule['REPLAY_EPOCH_START_T'] < t
     spks_up[-mask.sum():, p['N_PC']:] += np.random.poisson(
-        p['R_RPL_PC_ST'] * DT, (mask.sum(), p['N_PC']))
+        p['R_RPL_PC_ST'] * s_params['DT'], (mask.sum(), p['N_PC']))
         
     return spks_up
 
@@ -383,8 +399,49 @@ def add_i_ext_trg(t, ntwk, i_ext, p, schedule):
     return i_ext
 
 
-def get_metrics(rslt):
-    # ...
+def get_metrics(rslt, s_params):
+    """
+    Compute basic metrics from smln rslt quantifying replay properties.
+    """
+    m = s_params['metrics']
+    mask_pc = rslt.ntwk.types_rcr == 'PC'
+    
+    # get masks over trj & non-trj PCs
+    trj_mask = (rslt.trj_veil * mask_pc) > (m['MIN_SCALE_TRJ'] - 1)
+    non_trj_mask = (~trj_mask) & mask_pc
+    
+    # get t_mask for detection window
+    start = rslt.ntwk.schedule['TRG_START_T']
+    end = start + m['WDW']
+    t_mask = (start <= rslt.ts) & (rslt.ts < end)
+    
+    # get spk cts for trj/non-trj cells during detection window
+    spks_wdw = rslt.spks[t_mask]
+    spks_trj = spks_wdw[:, trj_mask]
+    spks_non_trj = spks_wdw[:, non_trj_mask]
+    
+    # get fraction of trj/non-trj cells that spiked
+    frac_spk_trj = np.mean(spks_trj.sum(0) > 0)
+    frac_spk_non_trj = np.mean(spks_non_trj.sum(0) > 0)
+    
+    # get avg spk ct of spiking trj cells
+    avg_spk_ct_trj = spks_trj.sum(0)[spks_trj.sum(0) > 0].mean()
+    
+    # check conditions for successful replay 
+    if (frac_spk_trj >= m['MIN_FRAC_SPK_TRJ']) \
+            and (frac_spk_non_trj < (frac_spk_trj * m['NON_TRJ_TRJ_SPK_RATIO'])) \
+            and (avg_spk_ct_trj < m['MAX_AVG_SPK_CT_TRJ']):
+        success = True
+    else:
+        success = False
+        
+    metrics = {
+        'frac_spk_trj': frac_spk_trj,
+        'frac_spk_non_trj': frac_spk_non_trj,
+        'avg_spk_ct_trj': avg_spk_ct_trj,
+        'success': success,
+    }
+    
     return metrics, success
 
 
@@ -397,11 +454,12 @@ def save(rslt, group, commit):
         params=rslt.p,
         s_params=rslt.s_params,
         apxn=rslt.apxn,
+        
         metrics=rslt.metrics,
         success=rslt.success,
         
-        ntwk_file=...,
-        smln_included=...,
+        ntwk_file='',
+        smln_included=False,
         
         commit=commit)
     

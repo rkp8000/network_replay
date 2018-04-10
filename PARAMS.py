@@ -34,11 +34,6 @@ T_N = 0.08  # (s)
 T_G = 0.005  # (s)
 
 
-# SIMULATION
-
-DT = 0.0005  # (s)
-
-
 # PLACE-TUNING AND TRAJECTORY GENERATION
 
 # L_PL = 0.2  # (m)
