@@ -7,6 +7,7 @@ params given as [lb, ub] lists are variable and will be searched over
 
 import PARAMS as P
 
+
 p_ranges = {
     # membrane potential
     'T_M_PC': P.T_M_PC,
@@ -33,7 +34,7 @@ p_ranges = {
     'W_AHP_PC': P.W_AHP_PC,
 
     # place-tuning
-    'L_PL': ?,
+    'L_PL': 0.2,
     'R_MAX': ?,
     'S_TH': ?,
     'B_S': ?,

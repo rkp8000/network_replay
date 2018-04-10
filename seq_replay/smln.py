@@ -31,13 +31,13 @@ def run(p, s_params, apxn):
     trj = build_trj(t, s_params, schedule)
     
     # get apx. real-valued mask ("veil") over trj nrns;
-    # values are >= 1 and correspond to apx. scale factors on
-    # corresponding ST->PC weights
+    # values are >= 0 and correspond to apx. scale factors on
+    # corresponding ST->PC weights minus 1
     trj_veil = get_trj_veil(trj, ntwk, p, s_params)
     
     # approximate ST -> PC weights if desired
     if apxn:
-        ntwk = apxt_ws_up(trj_veil, ntwk)
+        ntwk = apx_ws_up(ntwk, trj_veil)
         
     spks_up, i_ext = build_stim(t, trj, ntwk, p, s_params, schedule)
     
@@ -61,6 +61,22 @@ def run(p, s_params, apxn):
     return rslt
 
 
+def fix_schedule(schedule):
+    """
+    Update stimulus schedule to account for apxn of
+    trj section by starting at beginning of replay epoch.
+    """
+    schedule_fixed = copy(schedule)
+    t_0 = schedule['REPLAY_EPOCH_START_T']
+    
+    schedule_fixed['REPLAY_EPOCH_START_T'] = 0
+    schedule_fixed['SMLN_DUR'] = schedule['SMLN_DUR'] - t_0
+    schedule_fixed['TRJ_START_T'] = schedule['TRJ_START_T'] - t_0
+    schedule_fixed['TRG_START_T'] = schedule['TRG_START_T'] - t_0
+    
+    return schedule_fixed
+
+ 
 def build_ntwk(p, s_params):
     """
     Construct a network object from the model and
@@ -71,16 +87,21 @@ def build_ntwk(p, s_params):
     # set membrane properties
     n = p['N_PC'] + p['N_INH']
     
-    t_m = cc([np.repeat(p['T_M_PC'], p['N_PC']), np.repeat(p['T_M_INH'], p['N_INH'])])
-    e_l = cc([np.repeat(p['E_L_PC'], p['N_PC']), np.repeat(p['E_L_INH'], p['N_INH'])])
-    v_th = cc([np.repeat(p['V_TH_PC'], p['N_PC']), np.repeat(p['V_TH_INH'], p['N_INH'])])
-    v_r = cc([np.repeat(p['V_R_PC'], p['N_PC']), np.repeat(p['V_R_INH'], p['N_INH'])])
-    t_rp = cc([np.repeat(p['T_RP_PC'], p['N_PC']), np.repeat(p['T_RP_INH'], p['N_INH'])])
+    t_m = cc(
+        [np.repeat(p['T_M_PC'], p['N_PC']), np.repeat(p['T_M_INH'], p['N_INH'])])
+    e_l = cc(
+        [np.repeat(p['E_L_PC'], p['N_PC']), np.repeat(p['E_L_INH'], p['N_INH'])])
+    v_th = cc(
+        [np.repeat(p['V_TH_PC'], p['N_PC']), np.repeat(p['V_TH_INH'], p['N_INH'])])
+    v_r = cc(
+        [np.repeat(p['V_R_PC'], p['N_PC']), np.repeat(p['V_R_INH'], p['N_INH'])])
+    t_rp = cc(
+        [np.repeat(p['T_RP_PC'], p['N_PC']), np.repeat(p['T_RP_INH'], p['N_INH'])])
     
     # set latent nrn positions
     lb_x = -s_params['BOX_W']/2
-    lb_y = -s_params['BOX_H']/2
     ub_x = s_params['BOX_W']/2
+    lb_y = -s_params['BOX_H']/2
     ub_y = s_params['BOX_H']/2
     
     # sample positions uniformly
@@ -175,67 +196,6 @@ def build_ntwk(p, s_params):
     return ntwk
 
 
-def get_trj_veil(trj, ntwk, p, s_params):
-    """
-    Return a "veil" (positive real-valued mask) over cells in the ntwk
-    with place fields along the trajectory path.
-    """
-    # compute scale factor for all PCs
-    ## get distance to trj
-    d = dist_to_trj(trj['x'], trj['y'], ntwk.pfxs, ntwk.pfys)
-    
-    ## compute scale factor
-    g = np.maximum(1 - np.abs(d/s_params['RADIUS'])**s_params['PITCH'], 0)
-    veil = (1 - g) + g * p['A_P'] - 1
-    
-    return veil
-    
-    
-def apxt_ws_up(trj_veil, ntwk):
-    """
-    Replace ST->PC E weights with apxns expected following
-    initial sensory input.
-    """
-    scale = trj_veil[ntwk.types_rcr == 'PC'] + 1
-    ntwk.ws_up_init['E'][ntwk.plasticity['masks']['E']] *= scale
-    
-    return ntwk
-
-
-def dist_to_trj(pfxs, pfys, x, y):
-    """
-    Compute distance of static points (pfxs, pfys) to trajectory (x(t), y(t)).
-    """
-    # get dists to all pts along trj
-    dx = np.tile(pfxs[None, :], (len(x), 1)) - np.tile(x, (1, len(pfxs)))
-    dy = np.tile(pfys[None, :], (len(y), 1)) - np.tile(y, (1, len(pfys)))
-    
-    d = np.sqrt(dx**2 + dy**2)
-    
-    # return dists of cells to nearest pts on trj
-    return np.min(d, axis=0)
-
-
-def fix_schedule(schedule):
-    """
-    Update stimulus schedule to account for apxn.
-    """
-    schedule_fixed = copy(schedule)
-    t_0 = schedule['REPLAY_EPOCH_START_T']
-    
-    schedule_fixed['SMLN_DUR'] = schedule['SMLN_DUR'] - t_0
-    schedule_fixed['TRJ_START_T'] = schedule['TRJ_START_T'] - t_0
-    schedule_fixed['REPLAY_EPOCH_START_T'] = 0
-    schedule_fixed['TRG_START_T'] = schedule['TRG_START_T'] - t_0
-    
-    for k, v in schedule_fixed.items():
-        if v < 0:
-            msg = 'Fixed schedule includes negative values: {}'.format(schedule_fixed)
-            raise ValueError(msg)
-        
-    return schedule_fixed
-
-
 def build_trj(t, s_params, schedule):
     """
     Build trajectory.
@@ -243,11 +203,11 @@ def build_trj(t, s_params, schedule):
     ## start
     t_0 = schedule['TRJ_START_T']
     ## first turn
-    t_1 = t_0 + (s_params['START_X'] - s_params['TURN_X']) / s_params['SPEED']
+    t_1 = t_0 + np.abs(s_params['TURN_X'] - s_params['START_X']) / s_params['SPEED']
     ## second turn
-    t_2 = t_1 + (s_params['TURN_Y'] - s_params['START_Y']) / s_params['SPEED']
+    t_2 = t_1 + np.abs(s_params['TURN_Y'] - s_params['START_Y']) / s_params['SPEED']
     ## end
-    t_3 = t_2 + (s_params['END_X'] - s_params['TURN_X']) / s_params['SPEED']
+    t_3 = t_2 + np.abs(s_params['END_X'] - s_params['TURN_X']) / s_params['SPEED']
     
     x = np.repeat(np.nan, len(t))
     y = np.repeat(np.nan, len(t))
@@ -281,9 +241,53 @@ def build_trj(t, s_params, schedule):
     y[t_3 <= t] = s_params['TURN_Y']
     sp[t_3 <= t] = 0
     
+    if np.any(np.isnan(x)) or np.any(np.isnan(y)) or np.any(np.isnan(sp)):
+        raise ValueError('NaNs detected in trj.')
+    
     return {'x': x, 'y': y, 'sp': sp}
-        
-        
+ 
+    
+def get_trj_veil(trj, ntwk, p, s_params):
+    """
+    Return a "veil" (positive real-valued mask) over cells in the ntwk
+    with place fields along the trajectory path.
+    """
+    # compute scale factor for all PCs
+    ## get distance to trj
+    d = dist_to_trj(ntwk.pfxs, ntwk.pfys, trj['x'], trj['y'])
+    
+    ## compute scale factor
+    g = np.maximum(1 - np.abs(d/s_params['RADIUS'])**s_params['PITCH'], 0)
+    veil = ((1 - g)*1 + g*p['A_P']) - 1
+    
+    return veil
+    
+    
+def dist_to_trj(pfxs, pfys, x, y):
+    """
+    Compute distance of static points (pfxs, pfys) to trajectory (x(t), y(t)).
+    """
+    # get dists to all pts along trj
+    dx = np.tile(pfxs[None, :], (len(x), 1)) - np.tile(x[:, None], (1, len(pfxs)))
+    dy = np.tile(pfys[None, :], (len(y), 1)) - np.tile(y[:, None], (1, len(pfys)))
+    
+    d = np.sqrt(dx**2 + dy**2)
+    
+    # return dists of cells to nearest pts on trj
+    return np.min(d, 0)
+
+   
+def apx_ws_up(ntwk, trj_veil):
+    """
+    Replace ST->PC E weights with apxns expected following
+    initial sensory input.
+    """
+    scale = trj_veil[ntwk.types_rcr == 'PC'] + 1
+    ntwk.ws_up_init['E'][ntwk.plasticity['masks']['E']] *= scale
+    
+    return ntwk
+
+       
 def build_stim(t, trj, ntwk, p, s_params, schedule):
     """
     Put together upstream spk and external current inputs
@@ -292,37 +296,22 @@ def build_stim(t, trj, ntwk, p, s_params, schedule):
     np.random.seed(s_params['RNG_SEED'])
     
     # initialize upstream spks array
-    n_up = ntwk.ws_up['E'].shape[1]
-    spks_up = np.zeros((len(t), n_up), int)
+    spks_up = np.zeros((len(t), 2*p['N_PC']), int)
     
     # fill in trajectory spks if required
     if schedule['REPLAY_EPOCH_START'] > 0:
-        spks_up = add_spks_up_trj(trj, ntwk, spks_up, p, s_params, schedule)
+        spks_up += spks_up_from_trj(trj, ntwk, p, s_params)
     
     # fill in replay epoch STATE inputs
-    spks_up = add_spks_up_st(t, ntwk, spks_up, p, s_params, schedule)
+    spks_up += spks_up_from_st(t, ntwk, p, s_params, schedule)
     
-    # initialize upstream current array
-    n_rcr = ntwk.ws_rcr['E'].shape[1]
-    i_ext = np.zeros((len(t), n_rcr))
+    # initialize external current array
+    i_ext = np.zeros((len(t), p['N_PC'] + p['N_INH']))
     
-    # fill in replay trigger
-    i_ext = add_i_ext_trg(t, ntwk, i_ext, p, schedule)
+    # add replay trigger
+    i_ext += i_ext_trg(t, ntwk, p, schedule)
     
     return spks_up, i_ext
-
-
-def add_spks_up_trj(trj, ntwk, spks_up, p, s_params, schedule):
-    """
-    Add traj-generated spks to upstream spk input.
-    The trajectory in question is a two-turn trajectory consisting 
-    of a horizontal leg, followed by a vertical leg, followed by 
-    another horizontal leg.
-    """
-    # convert to upstream spks
-    spks_up_trj = spks_up_from_trj(trj, ntwk, p, s_params)
-    
-    return spks_up + spks_up_trj
 
 
 def spks_up_from_trj(trj, ntwk, p, s_params):
@@ -353,20 +342,22 @@ def spks_up_from_trj(trj, ntwk, p, s_params):
     spk_rs = rs_d * fs
     
     # get spks
-    spks_temp = np.random.poisson(spk_rs * s_params['DT'])
+    spks_tmp = np.random.poisson(spk_rs * s_params['DT'])
     
     # convert to full-sized input upstream input array
-    return cc([spks_tmp, np.zeros(spks_temp.shape, int)], axis=1)
+    return cc([spks_tmp, np.zeros(spks_tmp.shape, int)], 1)
 
 
-def add_spks_up_st(t, ntwk, spks_up, p, s_params, schedule):
+def spks_up_from_st(t, ntwk, p, s_params, schedule):
     """
     Add ST --> PC spks to upstream spk array.
     """
+    spks_up = np.zeros((len(t), 2*p['N_PC']), int)
+    
     # sens/traj epoch
     if schedule['REPLAY_EPOCH_START_T'] > 0:
         mask = t <= schedule['REPLAY_EPOCH_START_T']
-        spks_up[:mask.sum(), p['N_PC']:] += np.random.poisson(
+        spks_up[mask, -p['N_PC']:] += np.random.poisson(
             p['R_TRJ_PC_ST'] * s_params['DT'], (mask.sum(), p['N_PC']))
         
     # replay epoch
@@ -377,10 +368,12 @@ def add_spks_up_st(t, ntwk, spks_up, p, s_params, schedule):
     return spks_up
 
 
-def add_i_ext_trg(t, ntwk, i_ext, p, schedule):
+def i_ext_trg(t, ntwk, p, schedule):
     """
     Add replay trigger to external current stim.
     """
+    i_ext = np.zeros((len(t), p['N_PC'] + p['N_INH']))
+    
     # get mask over cells to trigger to induce replay
     ## compute distances to trigger center
     dx = ntwk.pfxs - p['X_TR']
@@ -391,10 +384,11 @@ def add_i_ext_trg(t, ntwk, i_ext, p, schedule):
     nrn_mask = (d < p['R_TR']) & (ntwk.types_rcr == 'PC')
     
     ## get time mask
-    t_mask = (schedule['TRG_START_T'] <= t) & (t < (schedule['TRG_START_T'] + p['D_T_TR']))
+    t_mask = (schedule['TRG_START_T'] <= t) \
+        & (t < (schedule['TRG_START_T'] + p['D_T_TR']))
     
     ## add in external trigger
-    i_ext[np.outer(t_mask, nrn_mask)] += p['A_TR']
+    i_ext[np.outer(t_mask, nrn_mask)] = p['A_TR']
     
     return i_ext
 
@@ -429,7 +423,7 @@ def get_metrics(rslt, s_params):
     
     # check conditions for successful replay 
     if (frac_spk_trj >= m['MIN_FRAC_SPK_TRJ']) \
-            and (frac_spk_non_trj < (frac_spk_trj * m['NON_TRJ_TRJ_SPK_RATIO'])) \
+            and (frac_spk_trj >= (frac_spk_non_trj*m['TRJ_NON_TRJ_SPK_RATIO'])) \
             and (avg_spk_ct_trj < m['MAX_AVG_SPK_CT_TRJ']):
         success = True
     else:

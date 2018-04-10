@@ -32,6 +32,6 @@ s_params = {
         'WDW': 0.1,
         'MIN_FRAC_SPK_TRJ': .75,
         'MAX_AVG_SPK_CT_TRJ': 3,
-        'NON_TRJ_TRJ_SPK_RATIO': .75,
+        'TRJ_NON_TRJ_SPK_RATIO': .75,
     },
 }
