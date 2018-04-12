@@ -27,5 +27,5 @@ class SmlnRslt(Base):
     commit = Column(String)
  
     parent_id = Column(Integer, ForeignKey('smln_rslt.id'))
-    parent = relation('SmlnRslt', remote_side=[id])
+    parent = relationship('SmlnRslt', remote_side=[id])
     

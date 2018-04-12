@@ -2,7 +2,7 @@ from copy import deepcopy
 import numpy as np
 
 from aux import lognormal_mu_sig, sgmd
-import cxn
+from seq_replay import cxn
 from db import make_session, d_models
 from ntwk import LIFNtwk
 
@@ -133,14 +133,14 @@ def build_ntwk(p, s_params):
         pfys_inh=pfys[-p['N_INH']:],
         pfxs_pc=pfxs[:p['N_PC']],
         pfys_pc=pfys[:p['N_PC']],
-        p)
+        p=p)
     
     w_i_pc_inh = cxn.make_w_i_pc_inh(
         pfxs_pc=pfxs[:p['N_PC']],
         pfys_pc=pfys[:p['N_PC']],
         pfxs_inh=pfxs[-p['N_INH']:],
         pfys_inh=pfys[-p['N_INH']:],
-        p)
+        p=p)
     
     ws_rcr_temp = {
         'E': {
@@ -254,10 +254,12 @@ def get_trj_veil(trj, ntwk, p, s_params):
     """
     # compute scale factor for all PCs
     ## get distance to trj
-    d = dist_to_trj(ntwk.pfxs, ntwk.pfys, trj['x'], trj['y'])
+    d = dist_to_trj(ntwk.pfxs, ntwk.pfys, trj['x'], trj['y'])[0]
     
     ## compute scale factor
-    g = np.maximum(1 - np.abs(d/s_params['RADIUS'])**s_params['PITCH'], 0)
+    radius = s_params['metrics']['RADIUS']
+    pitch = s_params['metrics']['PITCH']
+    g = np.maximum(1 - np.abs(d/radius)**pitch, 0)
     veil = ((1 - g)*1 + g*p['A_P']) - 1
     
     return veil
@@ -266,6 +268,8 @@ def get_trj_veil(trj, ntwk, p, s_params):
 def dist_to_trj(pfxs, pfys, x, y):
     """
     Compute distance of static points (pfxs, pfys) to trajectory (x(t), y(t)).
+    
+    :return: dists to nearest pts, idxs of nearest pts
     """
     # get dists to all pts along trj
     dx = np.tile(pfxs[None, :], (len(x), 1)) - np.tile(x[:, None], (1, len(pfxs)))
@@ -274,7 +278,7 @@ def dist_to_trj(pfxs, pfys, x, y):
     d = np.sqrt(dx**2 + dy**2)
     
     # return dists of cells to nearest pts on trj
-    return np.min(d, 0)
+    return np.min(d, 0), np.argmin(d, 0)
 
    
 def apx_ws_up(ntwk, trj_veil):
@@ -309,7 +313,7 @@ def build_stim(t, trj, ntwk, p, s_params, schedule):
     i_ext = np.zeros((len(t), p['N_PC'] + p['N_INH']))
     
     # add replay trigger
-    i_ext += i_ext_trg(t, ntwk, p, schedule)
+    i_ext += i_ext_trg(t, ntwk, p, s_params, schedule)
     
     return spks_up, i_ext
 
@@ -368,7 +372,7 @@ def spks_up_from_st(t, ntwk, p, s_params, schedule):
     return spks_up
 
 
-def i_ext_trg(t, ntwk, p, schedule):
+def i_ext_trg(t, ntwk, p, s_params, schedule):
     """
     Add replay trigger to external current stim.
     """
@@ -376,21 +380,26 @@ def i_ext_trg(t, ntwk, p, schedule):
     
     # get mask over cells to trigger to induce replay
     ## compute distances to trigger center
-    dx = ntwk.pfxs - p['X_TR']
-    dy = ntwk.pfys - p['Y_TR']
-    d = np.sqrt(dx**2 + dy**2)
-    
-    ## get mask
-    nrn_mask = (d < p['R_TR']) & (ntwk.types_rcr == 'PC')
+    trg_mask = get_trg_mask_pc(ntwk, p, s_params)
     
     ## get time mask
     t_mask = (schedule['TRG_START_T'] <= t) \
         & (t < (schedule['TRG_START_T'] + p['D_T_TR']))
     
     ## add in external trigger
-    i_ext[np.outer(t_mask, nrn_mask)] = p['A_TR']
+    i_ext[np.outer(t_mask, trg_mask)] = p['A_TR']
     
     return i_ext
+
+
+def get_trg_mask_pc(ntwk, p, s_params):
+    dx = ntwk.pfxs - s_params['X_TRG']
+    dy = ntwk.pfys - s_params['Y_TRG']
+    d = np.sqrt(dx**2 + dy**2)
+    
+    ## get mask
+    trg_mask = (d < p['R_TR']) & (ntwk.types_rcr == 'PC')
+    return trg_mask
 
 
 def get_metrics(rslt, s_params):
@@ -405,7 +414,7 @@ def get_metrics(rslt, s_params):
     non_trj_mask = (~trj_mask) & mask_pc
     
     # get t_mask for detection window
-    start = rslt.ntwk.schedule['TRG_START_T']
+    start = rslt.schedule['TRG_START_T']
     end = start + m['WDW']
     t_mask = (start <= rslt.ts) & (rslt.ts < end)
     

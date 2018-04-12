@@ -83,8 +83,6 @@ p_ranges = {
     # replay trigger
     'D_T_TR': ?,
     'A_TR': ?,
-    'X_TR': ?,
-    'Y_TR': ?,
     'R_TR': [?, ?],
 }
 

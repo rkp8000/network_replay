@@ -10,7 +10,7 @@ import numpy as np
 from disp import set_font_size
 
 
-def heatmaps(rslt):
+def heat_maps(rslt):
     """
     Plot heatmaps showing:
         1. W_E_PC_ST values at start of trial.
@@ -18,10 +18,10 @@ def heatmaps(rslt):
         3. # spks per PC within detection wdw.
         4. Firing order of first spikes.
     """
-    fig, axs = plt.subplots(1, 2, figsize=(12, 6), tight_layout=True)
-    
     # W_E_PC_ST
     pcs = rslt.masks_plastic['E'].nonzero()[0]
+    
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6), tight_layout=True)
     
     ## at start
     w_e_pc_st_start = rslt.ws_plastic['E'][0, pcs]
@@ -76,6 +76,8 @@ def heatmaps(rslt):
         ax.set_xlabel('W_E_PC_ST')
         set_font_size(ax, 16)
     
+    figs = [fig]
+    axss = [axs]
     
     # PC spike statistics
     fig, axs = plt.subplots(1, 2, figsize=(12, 6), tight_layout=True)
@@ -154,6 +156,11 @@ def heatmaps(rslt):
         axs[1].set_title('No PC spks')
         set_font_size(axs[1], 16)
         
+    figs.append(fig)
+    axss.append(axs)
+    
+    return figs, axss
+        
         
 def raster(rslt, xys, nearest, epoch):
     """
@@ -171,15 +178,7 @@ def raster(rslt, xys, nearest, epoch):
     pfys = rslt.ntwk.pfys[pc_mask]
     
     ## loop through (x, y) pairs and add idxs of nearest PCs
-    pc_idxs = []
-    for xy in xys:
-        # get dists of all PFs to (x, y)
-        dx = pfxs - xy[0]
-        dy = pfys - xy[1]
-        d = np.sqrt(dx**2 + dy**2)
-        
-        # add idxs of closest neurons to list
-        pc_idxs.extend(list(d.argsort()[:nearest]))
+    pc_idxs = get_idxs_nearest(xys, pfxs, pfys, nearest) 
     
     # get all spks for selected PCs
     spks_pc_chosen = rslt.spks[:, pc_idxs]
@@ -230,4 +229,25 @@ def raster(rslt, xys, nearest, epoch):
     
     for ax in [ax_0, ax_1]:
         set_font_size(ax, 16)
+        
+    return fig, axs
+        
+        
+def get_idxs_nearest(xys, pfxs, pfys, nearest):
+    """
+    Get ordered idxs of place fields nearest to a
+    sequence of (x, y) points.
+    """
+    idxs = []
+    
+    for xy in xys:
+        # get dists of all PFs to (x, y)
+        dx = pfxs - xy[0]
+        dy = pfys - xy[1]
+        d = np.sqrt(dx**2 + dy**2)
+        
+        # add idxs of closest neurons to list
+        idxs.extend(list(d.argsort()[:nearest]))
+        
+    return idxs
     

@@ -14,9 +14,12 @@ s_params = {
     'START_Y': .75,
     'TURN_X': 0,
     'TURN_Y': -.75,
-    'END_X': -1,
+    'END_X': 1,
     
-    'SPEED': .15,
+    'SPEED': .2,
+    
+    'X_TRG': 1,
+    'Y_TRG': -0.75,
     
     'schedule': {
         'SMLN_DUR': 22,
@@ -32,6 +35,6 @@ s_params = {
         'WDW': 0.1,
         'MIN_FRAC_SPK_TRJ': .75,
         'MAX_AVG_SPK_CT_TRJ': 3,
-        'TRJ_NON_TRJ_SPK_RATIO': .75,
+        'TRJ_NON_TRJ_SPK_RATIO': 1.5,
     },
 }
