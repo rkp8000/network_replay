@@ -25,13 +25,17 @@ W_AHP_INH = 0.
 E_L_PC = -0.068  # (V)
 E_L_INH = -0.058  # (V)
 
-E_A = 0  # (V)
-E_N = 0  # (V)
-E_G = -0.08  # (V)
+# E_A = 0  # (V)
+# E_N = 0  # (V)
+# E_G = -0.08  # (V)
+E_E = 0  # (V)
+E_I = -0.08  # (V)
 
-T_A = 0.002  # (s)
-T_N = 0.08  # (s)
-T_G = 0.005  # (s)
+# T_A = 0.002  # (s)
+# T_N = 0.08  # (s)
+# T_G = 0.005  # (s)
+T_E = 0.002  # (s)
+T_I = 0.005  # (s)
 
 
 # PLACE-TUNING AND TRAJECTORY GENERATION
