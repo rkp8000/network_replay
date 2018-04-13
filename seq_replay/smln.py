@@ -1,10 +1,11 @@
 from copy import deepcopy
 import numpy as np
+from scipy.sparse import csc_matrix
 
 from aux import lognormal_mu_sig, sgmd
 from seq_replay import cxn
 from db import make_session, d_models
-from ntwk import LIFNtwk
+from ntwk import LIFNtwk, join_w
 
 cc = np.concatenate
 
@@ -66,7 +67,7 @@ def fix_schedule(schedule):
     Update stimulus schedule to account for apxn of
     trj section by starting at beginning of replay epoch.
     """
-    schedule_fixed = copy(schedule)
+    schedule_fixed = deepcopy(schedule)
     t_0 = schedule['REPLAY_EPOCH_START_T']
     
     schedule_fixed['REPLAY_EPOCH_START_T'] = 0
@@ -123,7 +124,7 @@ def build_ntwk(p, s_params):
     targs_up = cc([np.repeat('PC', p['N_PC']), np.repeat('INH', p['N_INH'])])
     srcs_up = cc([np.repeat('PL', p['N_PC']), np.repeat('ST', p['N_PC'])])
     
-    ws_up = cxn.join_w(targs_up, srcs_up, ws_up_temp)
+    ws_up = join_w(targs_up, srcs_up, ws_up_temp)
     
     # make rcr ws
     w_e_pc_pc = cxn.make_w_e_pc_pc(pfxs[:p['N_PC']], pfys[:p['N_PC']], p)
@@ -153,18 +154,18 @@ def build_ntwk(p, s_params):
     }
     targs_rcr = cc([np.repeat('PC', p['N_PC']), np.repeat('INH', p['N_INH'])])
     
-    ws_rcr = cxn.join_w(targs_rcr, targs_rcr, ws_rcr_temp)
+    ws_rcr = join_w(targs_rcr, targs_rcr, ws_rcr_temp)
     
     # set plasticity params
     masks_plastic_temp = {
         'E': {
-            ('PC', 'ST'): np.eye(p['N_PC'], bool),
+            ('PC', 'ST'): np.eye(p['N_PC'], dtype=bool),
         },
     }
     
     plasticity = {
-        'masks': cxn.join_w(targs_up, srcs_up, masks_plastic_temp),
-        'w_pc_st_maxs': p['A_P'] * w_e_init_pc_st_flat,
+        'masks': join_w(targs_up, srcs_up, masks_plastic_temp),
+        'w_pc_st_maxs': {'E': p['A_P'] * w_e_init_pc_st_flat, 'I': np.array([])},
         'T_W': p['T_W'],
         'T_C': p['T_C'],
         'C_S': p['C_S'],
@@ -287,7 +288,11 @@ def apx_ws_up(ntwk, trj_veil):
     initial sensory input.
     """
     scale = trj_veil[ntwk.types_rcr == 'PC'] + 1
-    ntwk.ws_up_init['E'][ntwk.plasticity['masks']['E']] *= scale
+    
+    ws_up_init_e_dense = np.array(ntwk.ws_up_init['E'].todense())
+    ws_up_init_e_dense[ntwk.plasticity['masks']['E']] *= scale
+    
+    ntwk.ws_up_init['E'] = csc_matrix(ws_up_init_e_dense)
     
     return ntwk
 
@@ -303,7 +308,7 @@ def build_stim(t, trj, ntwk, p, s_params, schedule):
     spks_up = np.zeros((len(t), 2*p['N_PC']), int)
     
     # fill in trajectory spks if required
-    if schedule['REPLAY_EPOCH_START'] > 0:
+    if schedule['REPLAY_EPOCH_START_T'] > 0:
         spks_up += spks_up_from_trj(trj, ntwk, p, s_params)
     
     # fill in replay epoch STATE inputs
@@ -362,12 +367,12 @@ def spks_up_from_st(t, ntwk, p, s_params, schedule):
     if schedule['REPLAY_EPOCH_START_T'] > 0:
         mask = t <= schedule['REPLAY_EPOCH_START_T']
         spks_up[mask, -p['N_PC']:] += np.random.poisson(
-            p['R_TRJ_PC_ST'] * s_params['DT'], (mask.sum(), p['N_PC']))
+            p['FR_TRJ_PC_ST'] * s_params['DT'], (mask.sum(), p['N_PC']))
         
     # replay epoch
     mask = schedule['REPLAY_EPOCH_START_T'] < t
     spks_up[-mask.sum():, p['N_PC']:] += np.random.poisson(
-        p['R_RPL_PC_ST'] * s_params['DT'], (mask.sum(), p['N_PC']))
+        p['FR_RPL_PC_ST'] * s_params['DT'], (mask.sum(), p['N_PC']))
         
     return spks_up
 

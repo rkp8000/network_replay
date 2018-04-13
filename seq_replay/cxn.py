@@ -7,73 +7,6 @@ import numpy as np
 from aux import lognormal_mu_sig
 
 
-def join_w(targs, srcs, ws):
-    """
-    Combine multiple weight matrices specific to pairs of populations
-    into a single, full set of weight matrices (one per synapse type).
-    
-    :param targs: dict of boolean masks indicating targ cell classes
-    :param srcs: dict of boolean masks indicating source cell classes
-    :param ws: dict of inter-population weight matrices, e.g.:
-        ws = {
-            'AMPA': {
-                ('EXC', 'EXC'): np.array([[...]]),
-                ('INH', 'EXC'): np.array([[...]]),
-            },
-            'GABA': {
-                ('EXC', 'INH'): np.array([[...]]),
-                ('INH', 'INH'): np.array([[...]]),
-            }
-        }
-        note: keys given as (targ, src)
-    
-    :return: ws_full, a dict of full ws, one per synapse
-    """
-    # make sure all targ/src masks have same shape
-    targ_shapes = [mask.shape for mask in targs.values()]
-    src_shapes = [mask.shape for mask in srcs.values()]
-    
-    if len(set(targ_shapes)) > 1:
-        raise Exception('All targ masks must have same shape.')
-        
-    if len(set(src_shapes)) > 1:
-        raise Exception('All targ masks must have same shape.')
-        
-    n_targ = targ_shapes[0][0]
-    n_src = src_shapes[0][0]
-    
-    # make sure weight matrix dimensions match sizes
-    # of targ/src classes
-    for syn, ws_ in ws.items():
-        for (targ, src), w_ in ws_.items():
-            if not w_.shape == (targs[targ].sum(), srcs[src].sum()):
-                raise Exception(
-                    'Weight matrix for {}: ({}, {}) does not match '
-                    'dimensionality specified by targ/src masks.')
-        
-    # loop through synapse types
-    dtype = list(list(ws.values())[0].values())[0].dtype
-    ws_full = {}
-    
-    for syn, ws_ in ws.items():
-        
-        w = np.zeros((n_targ, n_src), dtype=dtype)
-        
-        # loop through population pairs
-        for (targ, src), w_ in ws_.items():
-            
-            # get mask of all cxns from src to targ
-            mask = np.outer(targs[targ], srcs[src])
-            
-            assert mask.sum() == w_.size
-            
-            w[mask] = w_.flatten()
-            
-        ws_full[syn] = w
-        
-    return ws_full
-
-
 def make_w_e_pc_pc(pfxs, pfys, p):
     """
     Make proximally biased PC-PC weight matrix.
@@ -93,10 +26,10 @@ def make_w_e_pc_pc(pfxs, pfys, p):
     np.fill_diagonal(prb, False)
     
     ## build cxn matrix from cxn prb
-    c = np.random.rand(n, n) < prb
+    c = np.random.rand(n_pc, n_pc) < prb
     
     # assign weights
-    w = np.zeros((n, n))
+    w = np.zeros((n_pc, n_pc))
     w[c] = np.random.lognormal(
         *lognormal_mu_sig(p['W_E_PC_PC'], p['S_E_PC_PC']), c.sum())
     

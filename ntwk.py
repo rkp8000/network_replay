@@ -59,6 +59,18 @@ def join_w(targs, srcs, ws):
     
     :return: ws_full, a dict of full ws, one per synapse
     """
+    # convert targs/srcs to dicts if given as arrays
+    if not isinstance(targs, dict):
+        targs_ = deepcopy(targs)
+        targs = {
+            cell_type: targs_ == cell_type for cell_type in set(targs_)
+        }
+    if not isinstance(srcs, dict):
+        srcs_ = deepcopy(srcs)
+        srcs = {
+            cell_type: srcs_ == cell_type for cell_type in set(srcs_)
+        }
+        
     # make sure all targ/src masks have same shape
     targ_shapes = [mask.shape for mask in targs.values()]
     src_shapes = [mask.shape for mask in srcs.values()]

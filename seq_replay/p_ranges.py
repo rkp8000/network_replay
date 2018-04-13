@@ -77,8 +77,8 @@ p_ranges = {
     'S_I_PC_INH': ?,
     
     # ST --> PC inputs
-    'R_TRJ_PC_ST': ?,
-    'R_RPL_PC_ST': ?,
+    'FR_TRJ_PC_ST': ?,
+    'FR_RPL_PC_ST': ?,
     
     # replay trigger
     'D_T_TR': ?,
