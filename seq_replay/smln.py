@@ -197,6 +197,43 @@ def build_ntwk(p, s_params):
     return ntwk
 
 
+def apx_lattice(lb, ub, n):
+    """
+    Arrange n points on an approximate lattice within a rectangle.
+    """
+    lb_x, lb_y = lb
+    ub_x, ub_y = ub
+
+    r_x = ub_x - lb_x
+    r_y = ub_y - lb_y
+
+    # get apx factors of n
+    n_x = np.sqrt((r_x/r_y) * n)
+    n_y = n/n_x
+
+    # get # pts per row
+    n_rows = int(np.round(n_y))
+    n_pts = [len(row) for row in np.array_split(np.arange(n), n_rows)]
+
+    # evenly distribute n_pts so that largest rows are not clumped at top
+
+    # assign (x, y) positions
+    ys_row = np.linspace(lb_y, ub_y, n_rows+2)[1:-1]
+
+    xs = []
+    ys = []
+
+    for y_row, n_pts_ in zip(ys_row, n_pts):
+
+        xs_ = list(np.linspace(lb_x, ub_x, n_pts_ + 2)[1:-1])
+        ys_ = list(np.repeat(y_row, len(xs_)))
+
+        xs.extend(xs_)
+        ys.extend(ys_)
+
+    return xs, ys
+
+
 def build_trj(t, s_params, schedule):
     """
     Build trajectory.
