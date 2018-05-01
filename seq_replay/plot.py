@@ -137,7 +137,8 @@ def heat_maps(rslt, epoch=None):
         ## color PCs according to timing of first spike
         spk_mask = spk_ct_wdw_pc > 0
         spk_order = np.argmax(spks_wdw_pc[:, spk_mask], 0)
-
+        spk_order = np.argsort(spk_order).argsort()
+        
         v_min = spk_order.min()
         v_max = spk_order.max()
 
