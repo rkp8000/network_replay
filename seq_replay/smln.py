@@ -23,16 +23,17 @@ def run(p, s_params, apxn):
     prep_start = time.time()
     schedule = deepcopy(s_params['schedule'])
     
-    ## adjust schedule if apxn used
-    if apxn:
-        schedule = fix_schedule(schedule)
-    
-    ## build ntwk
-    ntwk = build_ntwk(p, s_params)
-    
     ## build trajectory
     t = np.arange(0, schedule['SMLN_DUR'], s_params['DT'])
     trj = build_trj(t, s_params, schedule)
+    
+    ## adjust schedule if apxn used
+    if apxn:
+        schedule = fix_schedule(schedule)
+        t = np.arange(0, schedule['SMLN_DUR'], s_params['DT'])
+    
+    ## build ntwk
+    ntwk = build_ntwk(p, s_params)
     
     ## get apx. real-valued mask ("veil") over trj nrns;
     ## values are >= 0 and correspond to apx. scale factors on
