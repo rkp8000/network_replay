@@ -55,10 +55,10 @@ p_ranges = {
     'B_C': P.B_C,
     
     # PC --> PC connectivity
-    'N_PC': 500,
-    'L_PC_PC': [.03, .09],
+    'N_PC': 1000,
+    'L_PC_PC': [.05, .12],
     'Z_PC_PC': [.9, 1.5],
-    'W_E_PC_PC': [.004, .012],
+    'W_E_PC_PC': [.01, .03],
     'S_E_PC_PC': 0,
     
     # PC --> INH connectivity
@@ -82,8 +82,8 @@ p_ranges = {
     
     # replay trigger
     'D_T_TR': [.004, .008],
-    'A_TR': [.004, .006],
-    'R_TR': [.08, .22],
+    'A_TR': [.008, .01],
+    'R_TR': .4,
 }
 
 STD = .5

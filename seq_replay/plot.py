@@ -212,8 +212,11 @@ def raster(rslt, xys, nearest, epoch):
     ax_0 = fig.add_subplot(gs[:3])
     ax_0.scatter(spk_ts, pcs, c='k', s=10, marker='|', lw=1)
     
+    ## replay trigger
+    ax_0.scatter(rslt.schedule['TRG_START_T'], -1.5, marker='^', c='r')
+    
     ax_0.set_xlim(start, end)
-    ax_0.set_ylim(-1, len(pc_idxs))
+    ax_0.set_ylim(-3, len(pc_idxs))
     
     ax_0.set_xlabel('t (s)')
     ax_0.set_ylabel('PC idx')
