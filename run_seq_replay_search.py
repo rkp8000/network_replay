@@ -24,7 +24,8 @@ def search(group, commit, wait=None):
         if ctr % 50 == 0:
             stdout.write('\n{}'.format(ctr))
             stdout.flush()
-            
+        
+        np.random.seed()
         p = sample_params()
         
         # run smln
