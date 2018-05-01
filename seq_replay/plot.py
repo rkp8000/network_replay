@@ -10,7 +10,7 @@ import numpy as np
 from disp import set_font_size
 
 
-def heat_maps(rslt):
+def heat_maps(rslt, epoch=None):
     """
     Plot heatmaps showing:
         1. W_E_PC_ST values at start of trial.
@@ -82,8 +82,12 @@ def heat_maps(rslt):
     fig, axs = plt.subplots(1, 2, figsize=(12, 6), tight_layout=True)
 
     ## detection wdw
-    start = rslt.schedule['TRG_START_T']
-    end = start + rslt.s_params['metrics']['WDW']
+    if epoch is None:
+        start = rslt.schedule['TRG_START_T']
+        end = start + rslt.s_params['metrics']['WDW']
+    else:
+        start = epoch[0]
+        end = epoch[1]
 
     t_mask = (start <= rslt.ts) & (rslt.ts < end)
 
@@ -197,6 +201,9 @@ def raster(rslt, xys, nearest, epoch):
     elif epoch == 'full':
         start = 0
         end = rslt.schedule['SMLN_DUR']
+    elif isinstance(epoch, tuple):
+        start = epoch[0]
+        end = epoch[1]
     
     t_mask = (start <= rslt.ts) & (rslt.ts < end)
     t_start = rslt.ts[t_mask][0]
