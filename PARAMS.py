@@ -1,14 +1,14 @@
 # MEMBRANE POTENTIAL DYNAMICS
 
 T_M_PC = 0.05  # (s)
-V_REST_PC = -0.068  # (V)
+E_L_PC = -0.068  # (V)
 V_TH_PC = -0.036  # (V)
-V_RESET_PC = -0.068  # (V)
+V_R_PC = -0.068  # (V)
 
 T_M_INH = 0.009  # (s)
-V_REST_INH = -0.058  # (V)
+E_L_INH = -0.058  # (V)
 V_TH_INH = -0.036  # (V)
-V_RESET_INH = -0.058  # (V)
+V_R_INH = -0.058  # (V)
 
 T_R_PC = 0.03  # (s)
 T_R_INH = 0.002  # (s)
@@ -22,20 +22,20 @@ W_AHP_INH = 0.
 
 # SYNAPTIC CONDUCTANCE DYNAMICS
 
-E_L_PC = -0.068  # (V)
-E_L_INH = -0.058  # (V)
-
-# E_A = 0  # (V)
-# E_N = 0  # (V)
-# E_G = -0.08  # (V)
 E_E = 0  # (V)
 E_I = -0.08  # (V)
 
-# T_A = 0.002  # (s)
-# T_N = 0.08  # (s)
-# T_G = 0.005  # (s)
 T_E = 0.002  # (s)
 T_I = 0.005  # (s)
+
+
+# ST->PC PLASTICITY
+
+T_W = 1  # (s)
+T_C = 1.5  # (s)
+C_S = 10
+B_C = 0.2
+A_P = 2
 
 
 # PLACE-TUNING AND TRAJECTORY GENERATION
@@ -84,9 +84,3 @@ T_I = 0.005  # (s)
 # W_A_INH_PC = 0.013
 
 
-# EC-CA3 PLASTICITY
-
-# T_W = 1  # (s)
-# T_C = 1.5  # (s)
-# C_S = 10
-# B_C = 0.2

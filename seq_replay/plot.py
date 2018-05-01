@@ -42,7 +42,7 @@ def heat_maps(rslt):
         pfxs_plastic, pfys_plastic, c=w_e_pc_st_start,
         s=25, vmin=v_min, vmax=v_max, cmap='hot')
 
-    axs[0].set_title('At trial start')
+    axs[0].set_title('W_E_PC_ST at trial start')
 
     ## colorbar nonsense
     divider_0 = make_axes_locatable(axs[0])
@@ -63,7 +63,7 @@ def heat_maps(rslt):
         im_1, cax=c_ax_1, ticks=[v_min, v_max])
     cb_1.set_ticklabels(['{0:.4f}'.format(v_min), '{0:.4f}'.format(v_max)])
 
-    axs[1].set_title('At replay trigger')
+    axs[1].set_title('W_E_PC_ST at replay trigger')
 
     for ax in axs[:2]:
         ax.set_xlabel('PF X (m)')
@@ -73,7 +73,6 @@ def heat_maps(rslt):
         set_font_size(ax, 16)
 
     for ax in [cb_0.ax, cb_1.ax]:
-        ax.set_xlabel('W_E_PC_ST')
         set_font_size(ax, 16)
 
     figs = [fig]
@@ -114,9 +113,9 @@ def heat_maps(rslt):
 
     cb_0 = fig.colorbar(im_0, cax=c_ax_0, ticks=range(6))
     cb_0.set_ticklabels([0, 1, 2, 3, 4, '>4'])
-    cb_0.set_label('spike count')
 
     axs[0].set_aspect('equal')
+    axs[0].set_facecolor((.7, .7, .7))
 
     axs[0].set_xlabel('PF X (m)')
     axs[0].set_ylabel('PF Y (m)')
@@ -149,12 +148,14 @@ def heat_maps(rslt):
         cb_1.set_ticklabels(['first', 'last'])
 
         axs[1].set_title('first spk order')
-
+        axs[1].set_aspect('equal')
+        
         for ax in [axs[1], cb_1.ax]:
             set_font_size(ax, 16)
     else:
         axs[1].set_title('No PC spks')
         set_font_size(axs[1], 16)
+    axs[1].set_facecolor((.7, .7, .7))
 
     figs.append(fig)
     axss.append(axs)
@@ -209,7 +210,10 @@ def raster(rslt, xys, nearest, epoch):
     
     ## spks
     ax_0 = fig.add_subplot(gs[:3])
-    # ax_0.scatter(spk_ts, pcs, c='k', s=10, marker='|', lw=0.5)
+    ax_0.scatter(spk_ts, pcs, c='k', s=10, marker='|', lw=1)
+    
+    ax_0.set_xlim(start, end)
+    ax_0.set_ylim(-1, len(pc_idxs))
     
     ax_0.set_xlabel('t (s)')
     ax_0.set_ylabel('PC idx')
@@ -221,11 +225,12 @@ def raster(rslt, xys, nearest, epoch):
     
     ax_1.scatter(
         pfxs[pc_idxs], pfys[pc_idxs], c=np.linspace(0, 1, len(pc_idxs)),
-        s=25, lw=0, vmin=0, vmax=1, cmap='spring')
+        s=20, lw=0, vmin=0, vmax=1, cmap='spring')
     
     ax_1.set_xlabel('x (m)')
     ax_1.set_ylabel('y (m)')
-    ax_1.set_title('PC PF locations')
+    ax_1.set_facecolor((.7, .7, .7))
+    ax_1.set_title('PC PFs')
     
     for ax in [ax_0, ax_1]:
         set_font_size(ax, 20)

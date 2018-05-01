@@ -1,3 +1,11 @@
+"""
+Main search code executable.
+
+Call using:
+
+$ python search.py <group_name> <commit id> [<wait_time>]
+"""
+
 import numpy as np
 import time
 import sys

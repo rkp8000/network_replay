@@ -1,6 +1,7 @@
 from copy import deepcopy
 import numpy as np
 from scipy.sparse import csc_matrix
+import time
 
 from aux import lognormal_mu_sig, sgmd
 from seq_replay import cxn
@@ -18,32 +19,44 @@ def run(p, s_params, apxn):
     :param s_params: dict of smln params
     :param apxn: dict of apxn params (or None if no apxn)
     """
+    # prepare smln
+    prep_start = time.time()
     schedule = deepcopy(s_params['schedule'])
     
-    # adjust schedule if apxn used
+    ## adjust schedule if apxn used
     if apxn:
         schedule = fix_schedule(schedule)
     
-    # build ntwk
+    ## build ntwk
     ntwk = build_ntwk(p, s_params)
     
-    # build trajectory
+    ## build trajectory
     t = np.arange(0, schedule['SMLN_DUR'], s_params['DT'])
     trj = build_trj(t, s_params, schedule)
     
-    # get apx. real-valued mask ("veil") over trj nrns;
-    # values are >= 0 and correspond to apx. scale factors on
-    # corresponding ST->PC weights minus 1
+    ## get apx. real-valued mask ("veil") over trj nrns;
+    ## values are >= 0 and correspond to apx. scale factors on
+    ## corresponding ST->PC weights minus 1
     trj_veil = get_trj_veil(trj, ntwk, p, s_params)
     
-    # approximate ST -> PC weights if desired
+    ## approximate ST -> PC weights if desired
     if apxn:
         ntwk = apx_ws_up(ntwk, trj_veil)
         
     spks_up, i_ext = build_stim(t, trj, ntwk, p, s_params, schedule)
     
-    rslt = ntwk.run(spks_up=spks_up, dt=s_params['DT'], i_ext=i_ext)
+    prep_end = time.time()
+    prep_time = prep_end - prep_start
     
+    # run smln
+    run_start = time.time()
+    
+    rslt = ntwk.run(spks_up=spks_up, dt=s_params['DT'], i_ext=i_ext)
+    run_end = time.time()
+    
+    run_time = run_end - run_start
+    
+    # consolidate smln rslt
     rslt.ntwk = ntwk
     rslt.schedule = schedule
     
@@ -58,6 +71,9 @@ def run(p, s_params, apxn):
     
     rslt.metrics = metrics
     rslt.success = success
+    
+    rslt.prep_time = prep_time
+    rslt.run_time = run_time
    
     return rslt
 
@@ -100,13 +116,18 @@ def build_ntwk(p, s_params):
         [np.repeat(p['T_RP_PC'], p['N_PC']), np.repeat(p['T_RP_INH'], p['N_INH'])])
     
     # set latent nrn positions
-    lb_x = -s_params['BOX_W']/2
-    ub_x = s_params['BOX_W']/2
-    lb_y = -s_params['BOX_H']/2
-    ub_y = s_params['BOX_H']/2
+    lb = [-s_params['BOX_W']/2, -s_params['BOX_H']/2]
+    ub = [s_params['BOX_W']/2, s_params['BOX_H']/2]
     
-    # sample positions uniformly
-    pfxs, pfys = np.random.uniform([lb_x, lb_y], [ub_x, ub_y], (n, 2)).T
+    # sample evenly spaced place fields
+    ## E cells
+    pfxs_e, pfys_e = cxn.apx_lattice(lb, ub, p['N_PC'], randomize=True)
+    ## I cells
+    pfxs_i, pfys_i = cxn.apx_lattice(lb, ub, p['N_INH'], randomize=True)
+    
+    ## join E & I place fields
+    pfxs = cc([pfxs_e, pfxs_i])
+    pfys = cc([pfys_e, pfys_i])
     
     # make upstream ws
     w_e_pc_pl_flat = np.random.lognormal(
@@ -195,43 +216,6 @@ def build_ntwk(p, s_params):
     ntwk.types_rcr = targs_rcr
     
     return ntwk
-
-
-def apx_lattice(lb, ub, n):
-    """
-    Arrange n points on an approximate lattice within a rectangle.
-    """
-    lb_x, lb_y = lb
-    ub_x, ub_y = ub
-
-    r_x = ub_x - lb_x
-    r_y = ub_y - lb_y
-
-    # get apx factors of n
-    n_x = np.sqrt((r_x/r_y) * n)
-    n_y = n/n_x
-
-    # get # pts per row
-    n_rows = int(np.round(n_y))
-    n_pts = [len(row) for row in np.array_split(np.arange(n), n_rows)]
-
-    # evenly distribute n_pts so that largest rows are not clumped at top
-
-    # assign (x, y) positions
-    ys_row = np.linspace(lb_y, ub_y, n_rows+2)[1:-1]
-
-    xs = []
-    ys = []
-
-    for y_row, n_pts_ in zip(ys_row, n_pts):
-
-        xs_ = list(np.linspace(lb_x, ub_x, n_pts_ + 2)[1:-1])
-        ys_ = list(np.repeat(y_row, len(xs_)))
-
-        xs.extend(xs_)
-        ys.extend(ys_)
-
-    return xs, ys
 
 
 def build_trj(t, s_params, schedule):
@@ -502,6 +486,9 @@ def save(rslt, group, commit):
         
         metrics=rslt.metrics,
         success=rslt.success,
+        
+        prep_time=rslt.prep_time,
+        run_time=rslt.run_time,
         
         ntwk_file='',
         smln_included=False,

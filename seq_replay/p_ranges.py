@@ -34,18 +34,18 @@ p_ranges = {
     'W_AHP_PC': P.W_AHP_PC,
 
     # place-tuning
-    'L_PL': 0.2,
-    'R_MAX': ?,
-    'S_TH': ?,
-    'B_S': ?,
+    'L_PL': .2,
+    'R_MAX': 600,
+    'S_TH': .1,
+    'B_S': .01,
     
     # PL --> PC connectivity
-    'W_E_PC_PL': [?, ?],
-    'S_E_PC_PL': ?,
+    'W_E_PC_PL': [.02, .02],
+    'S_E_PC_PL': 0,
 
     # STATE --> PC connectivity
-    'W_E_INIT_PC_ST': [?, ?],
-    'S_E_INIT_PC_ST': ?,
+    'W_E_INIT_PC_ST': [.004, .013],
+    'S_E_INIT_PC_ST': 0,
     
     # plasticity
     'T_C': P.T_C,
@@ -55,35 +55,35 @@ p_ranges = {
     'B_C': P.B_C,
     
     # PC --> PC connectivity
-    'N_PC': ?,
-    'L_PC_PC': [?, ?],
-    'Z_PC_PC': [?, ?],
-    'W_E_PC_PC': [?, ?],
-    'S_E_PC_PC': ?,
+    'N_PC': 500,
+    'L_PC_PC': [.03, .09],
+    'Z_PC_PC': [.9, 1.5],
+    'W_E_PC_PC': [.004, .012],
+    'S_E_PC_PC': 0,
     
     # PC --> INH connectivity
-    'N_INH': ?,
-    'Z_INH_PC': ?,
-    'L_INH_PC': ?,
-    'W_E_INH_PC': ?,
-    'S_E_INH_PC': ?,
+    'N_INH': 100,
+    'L_INH_PC': [.03, .09],
+    'Z_INH_PC': [.9, 1.5],
+    'W_E_INH_PC': [.004, .02],
+    'S_E_INH_PC': 0,
     
     # INH --> PC connectivity
-    'L_C_PC_INH': ?,
-    'Z_C_PC_INH': ?,
-    'L_S_PC_INH': ?,
-    'Z_S_PC_INH': ?,
-    'W_I_PC_INH': ?,
-    'S_I_PC_INH': ?,
+    'L_C_PC_INH': [.03, .07],
+    'Z_C_PC_INH': [2.5, 3.5],
+    'L_S_PC_INH': [.06, .12],
+    'Z_S_PC_INH': [2.5, 3.5],
+    'W_I_PC_INH': 0,  # [.004, .025],
+    'S_I_PC_INH': 0,
     
     # ST --> PC inputs
-    'FR_TRJ_PC_ST': ?,
-    'FR_RPL_PC_ST': ?,
+    'FR_TRJ_PC_ST': 3,
+    'FR_RPL_PC_ST': [110, 150],
     
     # replay trigger
-    'D_T_TR': ?,
-    'A_TR': ?,
-    'R_TR': [?, ?],
+    'D_T_TR': [.004, .008],
+    'A_TR': [.004, .006],
+    'R_TR': [.08, .22],
 }
 
-STD = 1
+STD = .5

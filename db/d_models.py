@@ -21,6 +21,9 @@ class SmlnRslt(Base):
     metrics = Column(JSONB)
     success = Column(Boolean)
     
+    prep_time = Column(Float)
+    run_time = Column(Float)
+    
     ntwk_file = Column(String)
     smln_included = Column(Boolean)
     
