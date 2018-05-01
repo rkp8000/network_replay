@@ -11,8 +11,8 @@ import time
 import sys
 from sys import stdout
 
-from p_ranges import p_ranges, STD
-from s_params import s_params
+from seq_replay.p_ranges import p_ranges, STD
+from seq_replay.s_params import s_params
 from seq_replay import smln
 
 
@@ -28,8 +28,8 @@ def search(group, commit, wait=None):
         p = sample_params()
         
         # run smln
-        rslt = smln.run(p=p, s=s_params, apxn=True)
-        smln.save(rslt)
+        rslt = smln.run(p=p, s_params=s_params, apxn=True)
+        smln.save(rslt, group, commit)
         
         if wait:
             time.sleep(wait)
@@ -72,7 +72,7 @@ if __name__ == '__main__':
     wait = int(args[2]) if len(args) == 3 else None
     
     print('Begin smln in group "{}" with commit "{}..." at {} s wait time?'.format(
-        group, commit[:10], wait))
+        group, commit[:6], wait))
     confirm = input('[Y/N] ')
     
     if confirm.lower() == 'y':

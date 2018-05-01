@@ -67,7 +67,7 @@ def run(p, s_params, apxn):
     rslt.trj = trj
     rslt.trj_veil = trj_veil
     
-    metrics, success = get_metrics(rslt)
+    metrics, success = get_metrics(rslt, s_params)
     
     rslt.metrics = metrics
     rslt.success = success
@@ -113,7 +113,7 @@ def build_ntwk(p, s_params):
     v_r = cc(
         [np.repeat(p['V_R_PC'], p['N_PC']), np.repeat(p['V_R_INH'], p['N_INH'])])
     t_rp = cc(
-        [np.repeat(p['T_RP_PC'], p['N_PC']), np.repeat(p['T_RP_INH'], p['N_INH'])])
+        [np.repeat(p['T_R_PC'], p['N_PC']), np.repeat(p['T_R_INH'], p['N_INH'])])
     
     # set latent nrn positions
     lb = [-s_params['BOX_W']/2, -s_params['BOX_H']/2]
@@ -130,10 +130,17 @@ def build_ntwk(p, s_params):
     pfys = cc([pfys_e, pfys_i])
     
     # make upstream ws
-    w_e_pc_pl_flat = np.random.lognormal(
-        *lognormal_mu_sig(p['W_E_PC_PL'], p['S_E_PC_PL']), p['N_PC'])
-    w_e_init_pc_st_flat = np.random.lognormal(
-        *lognormal_mu_sig(p['W_E_INIT_PC_ST'], p['S_E_INIT_PC_ST']), p['N_PC'])
+    if p['W_E_PC_PL'] > 0:
+        w_e_pc_pl_flat = np.random.lognormal(
+            *lognormal_mu_sig(p['W_E_PC_PL'], p['S_E_PC_PL']), p['N_PC'])
+    else:
+        w_e_pc_pl_flat = np.zeros(p['N_PC'])
+    
+    if p['W_E_INIT_PC_ST'] > 0:
+        w_e_init_pc_st_flat = np.random.lognormal(
+            *lognormal_mu_sig(p['W_E_INIT_PC_ST'], p['S_E_INIT_PC_ST']), p['N_PC'])
+    else:
+        w_e_init_pc_st_flat = np.zeros(p['N_PC'])
     
     ws_up_temp = {
         'E': {
@@ -494,6 +501,9 @@ def save(rslt, group, commit):
         smln_included=False,
         
         commit=commit)
+    
+    session.add(smln_rslt)
+    session.commit()
     
     session.close()
     

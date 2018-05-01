@@ -14,13 +14,13 @@ p_ranges = {
     'E_L_PC': P.E_L_PC,
     'V_TH_PC': P.V_TH_PC,
     'V_R_PC': P.V_R_PC,
-    'T_RP_PC': 0.02,
+    'T_R_PC': 0.02,
 
     'T_M_INH': P.T_M_INH,
     'E_L_INH': P.E_L_INH,
     'V_TH_INH': P.V_TH_INH,
     'V_R_INH': P.V_R_INH,
-    'T_RP_INH': P.T_RP_INH,
+    'T_R_INH': P.T_R_INH,
 
     # synaptic params
     'E_E': P.E_E,
