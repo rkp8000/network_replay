@@ -10,11 +10,11 @@ import time
 from aux import load, save
 from aux import load_time_file
 from aux import downsample_spks, downsample_ma
-from plot import set_font_size
+from disp import set_font_size
 
 
 def ntwk(
-        frame_prfx, rsp, t_start=None, t_end=None,
+        frame_prfx, rslt, t_start=None, t_end=None,
         positions=None, box=None, fig_w=None, fig_h=None,
         resting_size=50, spk_size=1000, amp=1,
         non_spk_colors=None, spk_color='r',
@@ -27,8 +27,8 @@ def ntwk(
     Convert a time-series of membrane potentials and spks into viewable frames.
     
     :param frame_prfx: prefix of path to save frames at
-    :param rsp: ntwk response object or path to ntwk response object
-        rsp should have the following attributes:
+    :param rslt: ntwk response object or path to ntwk response object
+        rslt should have the following attributes:
             v_rest, v_th, ts, vs, spks, [cell_types, ws_rcr]
     :param t_start: start time of animation
     :param t_end: end time of animation
@@ -62,27 +62,27 @@ def ntwk(
     alert('\n')
     
     # load response file
-    if isinstance(rsp, str):
-        alert('Loading activity file "{}"...'.format(rsp))
-        rsp = load(rsp)
+    if isinstance(rslt, str):
+        alert('Loading activity file "{}"...'.format(rslt))
+        rslt = load(rslt)
         alert('Loaded.\n')
     
-    v_rest = rsp.v_rest
-    v_th = rsp.v_th
-    ts = rsp.ts
-    vs = rsp.vs
-    spks = rsp.spks
+    v_rest = rslt.v_rest
+    v_th = rslt.v_th
+    ts = rslt.ts
+    vs = rslt.vs
+    spks = rslt.spks
     
     n = vs.shape[1]
-    dt = np.mean(np.diff(rsp.ts))
+    dt = np.mean(np.diff(rslt.ts))
     fs = 1 / dt
     
-    if hasattr(rsp, 'cell_types'):
-        cell_types = rsp.cell_types
+    if hasattr(rslt, 'cell_types'):
+        cell_types = rslt.cell_types
     else:
         cell_types = np.repeat('PC', n)
     
-    ws_rcr = rsp.ws_rcr if hasattr(rsp, 'ws_rcr') else None
+    ws_rcr = rslt.ws_rcr if hasattr(rslt, 'ws_rcr') else None
     
     if fps > fs:
         raise ValueError(
@@ -128,12 +128,12 @@ def ntwk(
     if not non_spk_colors:
         non_spk_colors = {cell_type: 'k' for cell_type in set(cell_types)}
      
-    assert set(rsp.cell_types) == set(non_spk_colors)
+    assert set(rslt.cell_types) == set(non_spk_colors)
 
     non_spk_colors_ = np.repeat('', n)
     
-    for cell_type in set(rsp.cell_types):
-        non_spk_colors_[rsp.cell_types == cell_type] = non_spk_colors[cell_type]
+    for cell_type in set(rslt.cell_types):
+        non_spk_colors_[rslt.cell_types == cell_type] = non_spk_colors[cell_type]
     
     non_spk_colors = non_spk_colors_
    
