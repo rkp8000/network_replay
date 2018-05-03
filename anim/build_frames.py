@@ -1,4 +1,6 @@
 from copy import copy
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 from matplotlib.patches import Ellipse
 import matplotlib.pyplot as plt
 import numpy as np
@@ -14,45 +16,34 @@ from disp import set_font_size
 
 
 def ntwk(
-        frame_prfx, rslt, t_start=None, t_end=None,
-        positions=None, box=None, fig_w=None, fig_h=None,
-        resting_size=50, spk_size=1000, amp=1,
-        non_spk_colors=None, spk_color='r',
-        cxn_colors=None, cxn_lws=None, cxn_z_orders=None,
+        frame_prfx, rslt, epoch=None, positions=None, size=200,
+        box=None, fig_w=None, fig_h=None,
+        fps=30, frames_per_spk=2, show_timestamp=True,
         x_ticks=None, y_ticks=None, x_tick_labels=None, y_tick_labels=None,
         x_label='', y_label='', title='', font_size=16,
-        fps=30, frames_per_spk=5, show_timestamp=True,
         verbose=True, report_every=60):
     """
     Convert a time-series of membrane potentials and spks into viewable frames.
+    To ignore a subset of cells, set positions to np.nan.
     
     :param frame_prfx: prefix of path to save frames at
-    :param rslt: ntwk response object or path to ntwk response object
-        rslt should have the following attributes:
-            v_rest, v_th, ts, vs, spks, [cell_types, ws_rcr]
-    :param t_start: start time of animation
-    :param t_end: end time of animation
+    :param rslt: ntwk response object with the following attributes:
+        ts, vs, spks, ntwk
+        --ntwk should be LIFNtwk instance with the following attributes:
+            e_l, v_th
+    :param epoch: [start, end] time of animation
     :param positions: 2 x N array of cell positions
-        if None, positions will be uniform in unit square
     :param box: bounding box for displaying cells
     :param fig_w: figure width
     :param fig_h: figure height
         at least fig_w or fig_h must be provided; the other can be
         calculated automatically from box
-    :param resting_size: size of cell at resting potential
-    :param spk_size: size of cell when spiking
-    :param non_spk_color: dict of colors of non-spiking cells
-    :param spk_color: color of spiking cells
-    :param cxn_colors: dict of cxn colors, e.g.
-        {('PC', 'PC'): 'k', ('INH', 'PC': 'b')}
-    :param cxn_lws: dict of cxn line widths
-    :param cxn_z_orders: dict of cxn z_orders
-    :params x_ticks, y_ticks, x_tick_labels, y_tick_labels: as in matplotlib
-    :params x_label, y_label, title: as in matplotlib
-    :param font_size: font size
     :param fps: frame rate of animation (frames per second)
     :param frames_per_spk: how many frames to show each spk for
-    :param show_timestamp: whether to append current timestamp below title
+    :param show_timestamp: whether to append current timestamp below title 
+    :param x_ticks, y_ticks, x_tick_labels, y_tick_labels: as in matplotlib
+    :param x_label, y_label, title: as in matplotlib
+    :param font_size: font size
     :param verbose: whether to print out frame-building progress
     :param report_every: how often to report progress if verbose is True (s)
     
@@ -67,8 +58,9 @@ def ntwk(
         rslt = load(rslt)
         alert('Loaded.\n')
     
-    v_rest = rslt.v_rest
-    v_th = rslt.v_th
+    e_l = rslt.ntwk.e_l
+    v_th = rslt.ntwk.v_th
+    
     ts = rslt.ts
     vs = rslt.vs
     spks = rslt.spks
@@ -76,13 +68,6 @@ def ntwk(
     n = vs.shape[1]
     dt = np.mean(np.diff(rslt.ts))
     fs = 1 / dt
-    
-    if hasattr(rslt, 'cell_types'):
-        cell_types = rslt.cell_types
-    else:
-        cell_types = np.repeat('PC', n)
-    
-    ws_rcr = rslt.ws_rcr if hasattr(rslt, 'ws_rcr') else None
     
     if fps > fs:
         raise ValueError(
@@ -92,10 +77,8 @@ def ntwk(
     # make sure timestamp vector is same length as activity vectors
     assert len(ts) == len(vs) == len(spks)
     
-    if t_start is None:
-        t_start = ts[0] - dt
-    if t_end is None:
-        t_end = ts[-1] + dt
+    if epoch is None:
+        epoch = (ts[0] - dt, ts[-1] + dt)
         
     # generate random positions if not provided
     if positions is None:
@@ -106,12 +89,12 @@ def ntwk(
      
     # automatically compute box size if not provided
     if box is None:
-        x_min = positions[0].min()
-        x_max = positions[0].max()
+        x_min = np.nanmin(positions[0])
+        x_max = np.nanmax(positions[0])
         x_r = x_max - x_min
         
-        y_min = positions[1].min()
-        y_max = positions[1].max()
+        y_min = np.nanmin(positions[1])
+        y_max = np.nanmax(positions[1])
         y_r = y_max - y_min
         
         box = [
@@ -124,34 +107,10 @@ def ntwk(
     # automatically adjust box if either dimension is zero
     box = correct_box_dims(box)
     
-    # convert non_spk_colors into array of colors for each cell
-    if not non_spk_colors:
-        non_spk_colors = {cell_type: 'k' for cell_type in set(cell_types)}
-     
-    assert set(rslt.cell_types) == set(non_spk_colors)
-
-    non_spk_colors_ = np.repeat('', n)
-    
-    for cell_type in set(rslt.cell_types):
-        non_spk_colors_[rslt.cell_types == cell_type] = non_spk_colors[cell_type]
-    
-    non_spk_colors = non_spk_colors_
-   
-    # make sure all cxn args are dicts
-    if ws_rcr is not None:
-        assert isinstance(cxn_colors, dict)
-        assert isinstance(cxn_lws, dict)
-        assert isinstance(cxn_z_orders, dict)
-    
-        if not set(cxn_colors) == set(cxn_lws) == set(cxn_z_orders):
-            raise KeyError('All cxn* args must have same keys.')
-    else:
-        cxn_colors = {}
-        
     assert (fig_w is not None) or (fig_h is not None)
    
     # select data only in desired time window
-    t_mask = (t_start <= ts) & (ts < t_end)
+    t_mask = (epoch[0] <= ts) & (ts < epoch[1])
     
     assert t_mask.sum() > 0
     
@@ -172,9 +131,15 @@ def ntwk(
     
         alert('Downsampled.\n')
     
-    # convert membrane potentials to scatter sizes
-    slope = (spk_size - resting_size) / ((v_th - v_rest)**amp)
-    sizes = slope * ((vs - v_rest)**amp) + resting_size
+    # convert membrane potentials to color values
+    ## create slopes & icpts arrays with same size as vs
+    slopes = np.tile(np.array(1/(v_th - e_l))[None, :], (n_down, 1))
+    icpts = np.tile(np.array(-e_l/(v_th - e_l))[None, :], (n_down, 1))
+    
+    cs = slopes * vs + icpts
+    
+    # set up colormap for converting to rgba vals
+    cm = ScalarMappable(norm=Normalize(0, 1), cmap='viridis')
     
     # make sure save directory exists
     frame_dir = os.path.dirname(frame_prfx)
@@ -209,33 +174,8 @@ def ntwk(
         
     set_font_size(ax, font_size)
     
-    # draw cxns if desired
-    if cxn_colors:
-        alert('Drawing cxns...')
-        
-    for key in cxn_colors:
-        
-        targ, src, syn = key
-        
-        # get cxn mask
-        mask = np.outer(
-            np.array(cell_types) == targ,
-            np.array(cell_types) == src)
-
-        # convert cxns to broken line for fast plotting
-        line = w_to_line(ws_rcr[syn], mask, positions)
-        
-        ax.plot(
-            *line,
-            color=cxn_colors[key],
-            lw=cxn_lws[key],
-            zorder=cxn_z_orders[key])
-    
-    if cxn_colors:
-        alert('Drawn.\n')
-
     # position neurons
-    sca = ax.scatter(positions[0], positions[1], c=non_spk_colors, s=0, lw=0)
+    sca = ax.scatter(positions[0], positions[1], c='k', s=size, lw=0)
     
     # loop over frames
     alert(
@@ -248,21 +188,17 @@ def ntwk(
     loop_start_time = time.time()
     last_update = time.time()
     
-    for f_ctr, (t, sizes_, spks_) in enumerate(zip(ts, sizes, spks)):
+    for f_ctr, (t, cs_, spks_) in enumerate(zip(ts, cs, spks)):
         
         # get new spks
         spk_offset_ctr[spks_] = frames_per_spk
         
         # set colors according to spiking
-        colors = non_spk_colors.copy()
-        colors[spk_offset_ctr > 0] = spk_color
+        colors = cm.to_rgba(cs_)
+        colors[spk_offset_ctr > 0] = [1., 0, 0, 1]
         
         sca.set_color(colors)
             
-        # set sizes of non-spking neurons
-        sizes_[spk_offset_ctr > 0] = spk_size
-        sca.set_sizes(sizes_)
-        
         if show_timestamp:
             title_ = '{0}\nt = {1:.3f} s'.format(title, t)
             ax.set_title(title_, fontsize=font_size)
