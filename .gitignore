@@ -13,6 +13,7 @@ sandbox.ipynb
 temp*.ipynb
 *ipynb_checkpoints
 
+*data/
 *smlns/
 *test_anim/
 
