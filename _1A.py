@@ -310,14 +310,15 @@ def rfcd(make_ntwk, P, STORE, STORE_UNC=None, plot=True):
     bins = np.histogram(corrs[~np.isnan(corrs)], bins=20)[1]
     
     if plot:
-        axs[-1].hist(corrs, bins=bins, zorder=0)
+        axs[-1].hist(corrs[~np.isnan(corrs)], bins=bins, zorder=0)
 
         if STORE_UNC is not None:
             axs[-1].hist(STORE_UNC.corrs, bins=bins, zorder=1, alpha=0.3)
 
         axs[-1].set_xlabel('Pairwise FR Correlation')
         axs[-1].set_ylabel('Counts')
-        axs[-1].set_title('Mean = {0:.3f}, STD = {1:.3f}'.format(corrs.mean(), corrs.std()))
+        axs[-1].set_title('Mean = {0:.3f}, STD = {1:.3f}'.format(
+            np.nanmean(corrs), np.nanstd(corrs)))
     
     STORE.corrs = deepcopy(corrs)
 
@@ -428,7 +429,7 @@ def run_example(make_ntwk, nrns, e_leak, P, STORE):
     rsp_0, rsp_1 = run_e_leak_change_smlns(make_ntwk, nrns, e_leak, P, STORE)
 
     gs = gridspec.GridSpec(2, 3)
-    fig = plt.figure(figsize=(7.5, 5), tight_layout=True)
+    fig = plt.figure(figsize=(9, 6), tight_layout=True)
     axs = []
     
     axs.append(fig.add_subplot(gs[0, 1:]))
@@ -518,7 +519,7 @@ def calc_xblt_ifl(make_ntwk, P, e_l_1, return_frs=False):
         fr_0[nrn] = np.nan
         fr_1[nrn] = np.nan
 
-        xblt_ifl.append(np.sqrt(np.nansum((fr_0 - fr_1)**2) / P.n))
+        xblt_ifl.append(np.sqrt(np.nansum((fr_0 - fr_1)**2) / (P.n-1)))
     
     if return_frs:
         return xblt_ifl, in_deg, out_deg, frs_0, frs_1
@@ -543,8 +544,8 @@ def plot_xblt_ifl_vs_deg(xblt_ifl, in_deg, out_deg):
 
     axs[-1].plot(x, y, c='r')
 
-    axs[-1].set_xlabel('In-deg')
-    axs[-1].set_ylabel('Exc. Ifl. (Hz)')
+    axs[-1].set_xlabel('In-degree')
+    axs[-1].set_ylabel('Exc. Infl. (Hz)')
     axs[-1].set_title('R = {0:.3f}, P = {1:.3f}'.format(r, p))
 
     axs.append(fig.add_subplot(gs[0, 1]))
@@ -559,8 +560,8 @@ def plot_xblt_ifl_vs_deg(xblt_ifl, in_deg, out_deg):
 
     axs[-1].plot(x, y, c='r')
 
-    axs[-1].set_xlabel('Out-deg')
-    axs[-1].set_ylabel('Exc. Ifl. (Hz)')
+    axs[-1].set_xlabel('Out-degree')
+    axs[-1].set_ylabel('Exc. Infl. (Hz)')
     axs[-1].set_title('R = {0:.3f}, P = {1:.3f}'.format(r, p))
 
     axs.append(fig.add_subplot(gs[1, 0]))
@@ -569,8 +570,8 @@ def plot_xblt_ifl_vs_deg(xblt_ifl, in_deg, out_deg):
         in_deg, out_deg, c=xblt_ifl, s=10, 
         vmin=np.nanmin(xblt_ifl), vmax=np.nanmax(xblt_ifl))
 
-    axs[-1].set_xlabel('In-deg')
-    axs[-1].set_ylabel('Out-deg')
+    axs[-1].set_xlabel('In-degree')
+    axs[-1].set_ylabel('Out-degree')
     axs[-1].set_facecolor((.9, .9, .9))
 
     for ax in axs:
